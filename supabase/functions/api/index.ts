@@ -147,6 +147,16 @@ async function monthUsage(db: Db, teamId: string): Promise<number> {
   return Number(data ?? 0);
 }
 
+// Plano do Post for Me: limite do mês somando todos os times (app_settings.plan.posts_month).
+async function planUsage(db: Db): Promise<{ used: number; limit: number }> {
+  const [{ data: used, error }, { data: plan }] = await Promise.all([
+    db.rpc("plan_month_usage"),
+    db.from("app_settings").select("value").eq("key", "plan").maybeSingle(),
+  ]);
+  if (error) throw new HttpError(500, error.message);
+  return { used: Number(used ?? 0), limit: Number((plan?.value as { posts_month?: number } | null)?.posts_month) || 1000 };
+}
+
 async function teamInfo(db: Db, caller: Caller) {
   const [{ count }, used] = await Promise.all([
     db.from("accounts").select("id", { count: "exact", head: true }).eq("team_id", caller.teamId).eq("archived", false),
@@ -321,9 +331,12 @@ async function loadAccounts(db: Db, caller: Caller, ids: string[]) {
 }
 
 async function checkMonthLimit(db: Db, caller: Caller, adding: number) {
-  const used = await monthUsage(db, caller.teamId);
+  const [used, plan] = await Promise.all([monthUsage(db, caller.teamId), planUsage(db)]);
   if (used + adding > caller.maxPostsMonth) {
     throw new HttpError(400, `Limite do mês do time: ${caller.maxPostsMonth} publicações (conta a conta). Já usadas ou agendadas: ${used}. Esta publicação precisaria de mais ${adding}.`);
+  }
+  if (plan.used + adding > plan.limit) {
+    throw new HttpError(400, `O plano do Post for Me permite ${plan.limit} publicações por mês (conta a conta, somando todos os times). Já usadas ou agendadas: ${plan.used}. Esta publicação precisaria de mais ${adding}.`);
   }
 }
 
@@ -564,18 +577,21 @@ async function usage(db: Db, caller: Caller) {
   const start = new Date();
   start.setUTCDate(1);
   start.setUTCHours(0, 0, 0, 0);
-  const [{ count }, reserved, { data: wh }, { data: last }] = await Promise.all([
+  const [{ count }, reserved, { data: wh }, { data: last }, plan] = await Promise.all([
     db.from("post_targets").select("post_id, posts!inner(team_id)", { count: "exact", head: true })
       .eq("posts.team_id", caller.teamId).eq("status", "published").gte("published_at", start.toISOString()),
     monthUsage(db, caller.teamId),
     db.from("app_settings").select("value, updated_at").eq("key", "pfm_webhook").maybeSingle(),
     db.from("webhook_events").select("received_at, event_type").order("id", { ascending: false }).limit(1).maybeSingle(),
+    planUsage(db),
   ]);
   return {
     team: { id: caller.teamId, name: caller.teamName, role: caller.role, max_accounts: caller.maxAccounts },
     month_published: count ?? 0,
     month_reserved: reserved,
     month_limit: caller.maxPostsMonth,
+    plan_used: plan.used,
+    plan_limit: plan.limit,
     webhook: wh ? { id: (wh.value as { id: string }).id, url: (wh.value as { url: string }).url, since: wh.updated_at } : null,
     last_event: last ?? null,
   };

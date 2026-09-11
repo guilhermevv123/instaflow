@@ -87,7 +87,7 @@ export async function requireMember(req: Request): Promise<Caller> {
     teamName: team?.name ?? "Time",
     role: m.role as Caller["role"],
     maxAccounts: team?.max_accounts ?? 20,
-    maxPostsMonth: team?.max_posts_month ?? 300,
+    maxPostsMonth: team?.max_posts_month ?? 1000,
   };
 }
 

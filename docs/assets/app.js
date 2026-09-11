@@ -62,7 +62,7 @@ async function loadTeamContext() {
     role: m.role,
     name: m.teams?.name || "Time",
     max_accounts: m.teams?.max_accounts ?? 20,
-    max_posts_month: m.teams?.max_posts_month ?? 300,
+    max_posts_month: m.teams?.max_posts_month ?? 1000,
   }));
   let saved = null;
   try { saved = localStorage.getItem("if.team"); } catch {}

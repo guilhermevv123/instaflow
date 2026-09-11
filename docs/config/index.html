@@ -114,9 +114,12 @@
   async function loadUsage() {
     try {
       const u = await api("/usage");
+      const n = (v) => Number(v || 0).toLocaleString("pt-BR");
       const pct = Math.min(100, Math.round((u.month_reserved / u.month_limit) * 100));
-      $("#usage").innerHTML = `<div class="split"><b class="num" style="font-size:1.4rem">${u.month_published} <span class="muted" style="font-size:.9rem">publicadas · ${u.month_reserved} usadas ou agendadas de ${u.month_limit}</span></b><span class="muted small">${pct}%</span></div><div class="bar ${pct >= 90 ? "bad" : pct >= 70 ? "warn" : ""}"><i style="width:${pct}%"></i></div>`;
-      $("#limits").textContent = `Limites deste time: ${u.team.max_accounts} contas (Instagram, Facebook e TikTok) · ${u.month_limit} publicações por mês (conta a conta).`;
+      const pp = u.plan_limit ? Math.min(100, Math.round((u.plan_used / u.plan_limit) * 100)) : null;
+      $("#usage").innerHTML = `<div class="split"><b class="num" style="font-size:1.4rem">${n(u.month_reserved)} <span class="muted" style="font-size:.9rem">de ${n(u.month_limit)} usadas ou agendadas · ${n(u.month_published)} já publicadas</span></b><span class="muted small">${pct}%</span></div><div class="bar ${pct >= 90 ? "bad" : pct >= 70 ? "warn" : ""}"><i style="width:${pct}%"></i></div>`
+        + (pp === null ? "" : `<div class="split small" style="margin-top:6px"><span>Plano do Post for Me (somando todos os times)</span><b class="num">${n(u.plan_used)} de ${n(u.plan_limit)}</b></div><div class="bar ${pp >= 90 ? "bad" : pp >= 70 ? "warn" : ""}"><i style="width:${pp}%"></i></div>`);
+      $("#limits").textContent = `Limites deste time: ${u.team.max_accounts} contas (Instagram, Facebook e TikTok) · ${n(u.month_limit)} publicações por mês (conta a conta).`;
       $("#pfm").innerHTML = `
         <div class="split"><span>Chave da API</span><span class="pill ok">configurada no Supabase</span></div>
         <div class="split"><span>Avisos (webhook)</span>${u.webhook ? `<span class="pill ok">ativo</span>` : `<span class="pill warn">não registrado</span>`}</div>

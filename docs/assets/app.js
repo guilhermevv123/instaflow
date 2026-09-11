@@ -3,6 +3,9 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 export const cfg = window.INSTAFLOW_CONFIG || {};
 export const TZ = "America/Bahia"; // UTC-3, sem horário de verão
+
+// Menu lateral: aplica o estado salvo (recolhido/aberto) antes da primeira pintura.
+try { if (localStorage.getItem("if.side") === "min") document.documentElement.classList.add("side-min"); } catch {}
 export const configured = Boolean(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY);
 
 export const supa = configured
@@ -139,6 +142,23 @@ export function toast(message, kind = "info", ms = 4200) {
   setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 300); }, ms);
 }
 
+// Ícones do menu (traço, 24×24, estilo Feather).
+const ICONS = {
+  inicio: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  calendario: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  criar: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>',
+  contas: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  fila: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+  biblioteca: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+  config: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  sair: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  recolher: '<polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/>',
+  menu: '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
+};
+const ico = (k) => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
+
+// Menu lateral retrátil: no computador recolhe para só ícones (lembra a escolha);
+// no celular vira gaveta aberta pelo botão ☰.
 export function renderNav(active, rootRel, email) {
   const items = [
     ["inicio", "Início", ""],
@@ -151,12 +171,63 @@ export function renderNav(active, rootRel, email) {
   ];
   const nav = document.querySelector("header.top");
   if (!nav) return;
+  const root = document.documentElement;
+  nav.id = "menu";
   nav.innerHTML = `
-    <a class="brand" href="${rootRel}" aria-label="InstaFlow, início"><img class="brand-logo" src="${rootRel}assets/brand/instaflow-logo.svg" alt="InstaFlow"></a>
-    <nav class="tabs" aria-label="Seções">
-      ${items.map(([k, label, href]) => `<a href="${rootRel}${href}" class="${k === active ? "on" : ""}" ${k === active ? 'aria-current="page"' : ""}>${label}</a>`).join("")}
+    <div class="side-head">
+      <a class="brand" href="${rootRel}" aria-label="InstaFlow, início">
+        <img class="brand-logo" src="${rootRel}assets/brand/instaflow-logo.svg" alt="InstaFlow">
+        <img class="brand-icon" src="${rootRel}assets/brand/instaflow-icon.svg" alt="">
+      </a>
+      <button class="side-toggle" type="button" aria-controls="menu">${ico("recolher")}</button>
+    </div>
+    <nav class="side-nav" aria-label="Seções">
+      ${items.map(([k, label, href]) => `<a href="${rootRel}${href}" class="${k === active ? "on" : ""}" ${k === active ? 'aria-current="page"' : ""} title="${label}">${ico(k)}<span>${label}</span></a>`).join("")}
     </nav>
-    <div class="who"><span class="muted small">${esc(email || "")}</span><button class="btn ghost small" id="btn-sair">Sair</button></div>`;
+    <div class="side-foot">
+      <div class="side-user" title="${esc(email || "")}"><span class="av">${esc((email || "?")[0].toUpperCase())}</span><span class="side-email">${esc(email || "")}</span></div>
+      <button class="side-link" id="btn-sair" type="button" title="Sair">${ico("sair")}<span>Sair</span></button>
+    </div>`;
+
+  const bar = document.createElement("div");
+  bar.className = "mbar";
+  bar.innerHTML = `<button class="mbar-btn" type="button" aria-controls="menu" aria-expanded="false" aria-label="Abrir menu">${ico("menu")}</button>
+    <a href="${rootRel}" aria-label="InstaFlow, início"><img class="brand-logo" src="${rootRel}assets/brand/instaflow-logo.svg" alt="InstaFlow"></a>`;
+  nav.after(bar);
+  const scrim = document.createElement("div");
+  scrim.className = "scrim";
+  scrim.hidden = true;
+  document.body.appendChild(scrim);
+
+  const toggle = nav.querySelector(".side-toggle");
+  const menuBtn = bar.querySelector(".mbar-btn");
+  const mq = window.matchMedia("(max-width: 860px)");
+  const syncToggle = () => {
+    const min = root.classList.contains("side-min");
+    const label = mq.matches ? "Fechar menu" : min ? "Expandir menu" : "Recolher menu";
+    toggle.title = label;
+    toggle.setAttribute("aria-label", label);
+    toggle.setAttribute("aria-expanded", String(mq.matches ? root.classList.contains("side-open") : !min));
+  };
+  const setMin = (on) => {
+    root.classList.toggle("side-min", on);
+    try { localStorage.setItem("if.side", on ? "min" : "full"); } catch {}
+    syncToggle();
+  };
+  const setOpen = (on) => {
+    root.classList.toggle("side-open", on);
+    scrim.hidden = !on;
+    menuBtn.setAttribute("aria-expanded", String(on));
+    syncToggle();
+  };
+  toggle.addEventListener("click", () => (mq.matches ? setOpen(false) : setMin(!root.classList.contains("side-min"))));
+  menuBtn.addEventListener("click", () => setOpen(!root.classList.contains("side-open")));
+  scrim.addEventListener("click", () => setOpen(false));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && root.classList.contains("side-open")) { setOpen(false); menuBtn.focus(); }
+  });
+  mq.addEventListener?.("change", () => setOpen(false));
+  syncToggle();
   nav.querySelector("#btn-sair")?.addEventListener("click", () => signOut(rootRel));
 }
 

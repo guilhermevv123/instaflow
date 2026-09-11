@@ -1,0 +1,6 @@
+.git
+.claude
+supabase
+scripts
+*.md
+docs/__*

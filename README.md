@@ -63,6 +63,19 @@ Depois: entre com o e-mail admin ("Primeiro acesso" cria a senha; se o e-mail j�
 - **Post for Me:** webhook → `https://bcopmfxhfsyfwaajnnfm.supabase.co/functions/v1/pfm-webhook` (id e segredo em `app_settings.pfm_webhook`). Auth callback URL do projeto deve ser `https://guilhermevv123.github.io/instaflow/contas/`.
 - **Auth:** `uri_allow_list` inclui o painel e `http://localhost:8765/**` (servidor local: `.claude/launch.json` → `instaflow-local`).
 
+## Rodar com Docker
+
+O painel é estático; o container só serve a pasta `docs/` com nginx (≈77 MB).
+
+```bash
+docker build -t instaflow .
+docker run -d -p 8080:80 --name instaflow instaflow   # http://localhost:8080/
+```
+
+- `/healthz` responde `ok` (usado pelo HEALTHCHECK).
+- HTML e `assets/config.js` saem sem cache; CSS/JS/imagens com 1 h de cache.
+- Em domínio próprio, libere o domínio em: secret `INSTAFLOW_ALLOWED_ORIGINS` (CORS da função `api`), Supabase → Auth → Redirect URLs (`https://seu-dominio/**`) e Post for Me → Project Redirect URL (`https://seu-dominio/contas/`).
+
 ## Segurança
 
 - A chave do Post for Me só existe nos secrets do Supabase; o navegador nunca a vê.

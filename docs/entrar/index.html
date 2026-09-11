@@ -90,7 +90,15 @@
       } else if (mode === "signup") {
         if (password.length < 8) throw new Error("A senha precisa ter pelo menos 8 caracteres.");
         const { data, error } = await supa.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
-        if (error) throw new Error(traduz(error.message));
+        if (error) {
+          // E-mail já cadastrado: tenta entrar com a senha digitada antes de reclamar.
+          if (/already registered/i.test(error.message)) {
+            const tryIn = await supa.auth.signInWithPassword({ email, password });
+            if (!tryIn.error) { await afterLogin(); return; }
+            throw new Error("Este e-mail já tem conta e a senha não bate. Use 'Entrar' com a senha certa ou 'Esqueci a senha'.");
+          }
+          throw new Error(traduz(error.message));
+        }
         if (data.session) await afterLogin();
         else say("Conta criada. Agora clique em Entrar com o seu e-mail e a senha que você acabou de criar.", "ok");
       } else if (mode === "forgot") {

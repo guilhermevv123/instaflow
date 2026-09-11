@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Escreve site/assets/config.js com a URL e a chave pública (anon/publishable) do projeto.
+# Escreve docs/assets/config.js com a URL e a chave pública (anon/publishable) do projeto.
 # Uso: scripts/write-config.sh <PROJECT_REF>
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -19,7 +19,7 @@ print(k.get("api_key") or k.get("apiKey") or "")
 ')"
 [[ -n "$ANON" ]] || { echo "não achei a chave pública; rode: supabase projects api-keys --project-ref $REF"; exit 1; }
 
-cat > site/assets/config.js <<EOF
+cat > docs/assets/config.js <<EOF
 // Gerado por scripts/write-config.sh em $(date -u +%Y-%m-%dT%H:%M:%SZ). A chave abaixo é pública por desenho:
 // o que protege os dados é o RLS no banco e a checagem de e-mail na função \`api\`.
 window.INSTAFLOW_CONFIG = {
@@ -28,4 +28,4 @@ window.INSTAFLOW_CONFIG = {
   PLAN_MONTHLY_LIMIT: 1000,
 };
 EOF
-echo "✔ site/assets/config.js escrito para https://${REF}.supabase.co"
+echo "✔ docs/assets/config.js escrito para https://${REF}.supabase.co"

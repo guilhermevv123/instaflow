@@ -4,7 +4,7 @@ Um post agendado → publicado em várias contas de Instagram na hora marcada.
 Painel estático (GitHub Pages) + Supabase (banco, login e duas funções) + [Post for Me](https://www.postforme.dev) (API que conecta as contas, hospeda a mídia, agenda e publica pela API oficial do Instagram).
 
 ```
-site/                  painel (HTML/CSS/JS, sem build)
+docs/                  painel (HTML/CSS/JS, sem build)
   entrar/              login, primeiro acesso, redefinir senha
   index.html           Início
   calendario/ criar/ contas/ fila/ biblioteca/ config/
@@ -59,7 +59,7 @@ Depois: entre com o e-mail admin ("Primeiro acesso" cria a senha), vá em **Conf
   supabase functions deploy pfm-webhook --project-ref $SUPABASE_PROJECT_REF --no-verify-jwt --use-api
   ```
   SQL: Management API `POST /v1/projects/<ref>/database/query` (ver histórico em `supabase_migrations.schema_migrations`).
-- **Site:** https://guilhermevv123.github.io/instaflow/ (repo público `guilhermevv123/instaflow`, Pages em `/site`).
+- **Site:** https://guilhermevv123.github.io/instaflow/ (repo público `guilhermevv123/instaflow`, Pages em `/docs`).
 - **Post for Me:** webhook `wbh_12qyxP1lGGAuLCWogv0I` → `…/functions/v1/pfm-webhook` (segredo em `app_settings.pfm_webhook`). Auth callback URL do projeto deve ser `https://guilhermevv123.github.io/instaflow/contas/`.
 - **Auth:** cadastro auto-confirmado; `uri_allow_list` inclui `https://guilhermevv123.github.io/instaflow/**`.
 
@@ -74,4 +74,4 @@ Depois: entre com o e-mail admin ("Primeiro acesso" cria a senha), vá em **Conf
 
 - Nova migration: `supabase migration new nome` → editar → `supabase db push`.
 - Funções: `supabase functions deploy api --no-verify-jwt` (idem `pfm-webhook`). Checagem local: `cd supabase/functions && deno check api/index.ts pfm-webhook/index.ts`.
-- Site: editar `site/` e `git push` (Pages publica sozinho).
+- Site: editar `docs/` e `git push` (Pages publica sozinho).

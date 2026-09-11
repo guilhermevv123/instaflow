@@ -18,7 +18,7 @@
 #   3. grava os secrets (chave do Post for Me, origens permitidas)
 #   4. publica as funções api e pfm-webhook
 #   5. insere o primeiro admin em allowed_users
-#   6. escreve site/assets/config.js
+#   6. escreve docs/assets/config.js
 #   (o webhook do Post for Me é registrado sozinho na primeira vez que a página
 #    Contas sincroniza, ou pelo botão em Config → "Registrar avisos")
 #

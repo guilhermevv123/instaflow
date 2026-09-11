@@ -45,6 +45,7 @@ scripts/publish-site.sh  cria o repo público e ativa o GitHub Pages
 3. A função `api` cria **1 post no Post for Me com N contas** e grava `posts` + `post_targets` (uma linha por conta).
 4. No horário, o Post for Me publica (checa a cada 2 min) e chama `pfm-webhook` com o resultado de cada conta. A **Fila** mostra publicado/falhou/link do post; "Atualizar status" confere direto na API se algum aviso se perder.
 5. Falhou em 2 de 20? "Reenviar agora para as que falharam" cria um reenvio só para elas.
+6. **Desempenho** (menu lateral, com resumo no Início) → seguidores e ganhos por dia, visualizações, alcance, curtidas, comentários, compartilhamentos, salvos e tempo assistido de cada post e de cada conta; tabela por conta, melhores posts e todos os posts. A função `api` atualiza sozinha a cada 3 horas (pg_cron → `POST /metrics/cron`): seguidores, curtidas e comentários pela Graph API com a chave que o Post for Me guarda de cada conta; o resto pelo feed do Post for Me com `expand=metrics`, que só vem de contas conectadas com a permissão "feeds" (pedida desde 11/09; contas antigas usam **Liberar métricas** em Contas).
 
 Limites: Instagram aceita 100 posts por conta a cada 24 h via API; o plano do Post for Me (US$ 10) cobre 1.000 publicações/mês contadas **por conta** (20 contas × 1 post/dia ≈ 600).
 
@@ -100,6 +101,7 @@ docker run -d -p 8080:80 --name instaflow instaflow   # http://localhost:8080/
 - A chave do Post for Me só existe nos secrets do Supabase; o navegador nunca a vê.
 - Toda tabela tem RLS por time (`team_id in my_team_ids()`); `app_settings` e `webhook_events` só a service role.
 - A chave de IA de cada time fica em `team_ai_keys` (sem policy: só a service role lê); a API devolve só o começo e o fim dela e testa a chave antes de salvar. Limite de 150 gerações com IA por time a cada 24 h (`ai_calls`).
+- O agendador das métricas chama `POST /metrics/cron` com um segredo guardado em `app_settings('metrics_cron')` (url, chave pública e segredo — nunca neste repositório); sem ele a rota responde 401.
 - O webhook confere o segredo do Post for Me (cabeçalho `Post-For-Me-Webhook-Secret`) antes de aceitar.
 - Nunca rode `supabase config push` neste projeto (sobrescreve o Auth do painel).
 
@@ -108,4 +110,4 @@ docker run -d -p 8080:80 --name instaflow instaflow   # http://localhost:8080/
 - Nova migration: `supabase migration new nome` → editar → `supabase db push`.
 - Funções: `supabase functions deploy api --no-verify-jwt` (idem `pfm-webhook`). Checagem local: `cd supabase/functions && deno check api/index.ts pfm-webhook/index.ts`.
 - Site: editar `docs/` e `git push` (Pages publica sozinho).
-- Testes: `node --test tests/variar.test.mjs` (gerador local de variações) e `cd supabase/functions && deno test --allow-env --allow-net _shared/` (IA: provedores, conferência das versões e rotas com banco falso).
+- Testes: `node --test tests/variar.test.mjs` (gerador local de variações) e `cd supabase/functions && deno test --allow-env --allow-net _shared/` (IA e métricas: provedores, conferência das versões, rotas e sincronização com banco e APIs falsos).

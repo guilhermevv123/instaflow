@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="assets/style.css">
 <link rel="stylesheet" href="assets/dashboard.css">
+<link rel="stylesheet" href="assets/desempenho.css">
 <script src="assets/config.js"></script>
   <link rel="icon" type="image/svg+xml" href="assets/brand/instaflow-icon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/brand/favicon-32.png">
@@ -29,6 +30,14 @@
   <div class="dash-sec">Seus números</div>
   <div class="kpis" id="kpis">
     <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+  </div>
+
+  <div class="dash-sec perf-head"><span>Desempenho das contas</span><a class="small" href="desempenho/">Ver desempenho completo →</a></div>
+  <div class="kpis" id="perf-kpis">
     <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
     <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
     <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
@@ -94,6 +103,7 @@
 <script type="module">
   import { supa, requireAuth, api, renderNav, fmt, esc, accountHealth, postSummaryPill, PLACEMENT, toast, pageReady, team } from "./assets/app.js";
   import { paintAll, paintDist, exportCsv, paintIcons } from "./assets/dash.js";
+  import { carregar as carregarDesempenho, paintKpis as paintDesempenho } from "./assets/desempenho.js";
   renderNav("inicio", "./");
   paintIcons(document);
   await requireAuth("./");
@@ -116,6 +126,12 @@
     try { dash = await fetchDash(); paintAll(dash, { accounts }); }
     catch (e) { toast(e.message, "error"); }
     finally { document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = "")); }
+  }
+
+  // Desempenho das contas (seguidores, visualizações, engajamento) no mesmo período dos gráficos
+  async function loadPerf() {
+    try { paintDesempenho($("#perf-kpis"), await carregarDesempenho(supa, team.id, days), { link: "desempenho/" }); }
+    catch (e) { $("#perf-kpis").innerHTML = `<div class="ch-empty">Desempenho indisponível agora: ${esc(e.message)}</div>`; }
   }
 
   async function loadLists() {
@@ -151,6 +167,7 @@
     try { localStorage.setItem("if.dash.days", String(days)); } catch {}
     markPeriod();
     loadDash();
+    loadPerf();
   });
   $("#dist-tabs").addEventListener("click", (e) => {
     const b = e.target.closest("[data-t]");
@@ -165,6 +182,7 @@
     dash = d;
     paintAll(dash, { accounts });
   } catch (e) { toast(e.message, "error"); }
+  loadPerf();
   pageReady();
   // confere no Post for Me o que já deveria ter saído (em segundo plano) e atualiza
   api("/sync", { method: "POST", body: {} }).then((r) => { if (r.checked) { loadLists(); loadDash(); } }).catch(() => {});

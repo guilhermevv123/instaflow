@@ -151,11 +151,12 @@
         ${avatar(a, 36)}
         <span>
           <div class="title">${a.label ? `${esc(a.label)} <span class="muted">· </span>` : ""}${esc(handle(a))} <span class="muted small">· ${esc(platformName(a.platform))}</span></div>
-          <div class="sub acct-meta"><span class="inline">${gs || '<span class="muted">sem grupo</span>'}</span><span>${used} publicações nas 24 h</span>${d !== null ? `<span title="Renovação automática da chave">chave até ${fmt.date(a.access_token_expires_at)}</span>` : ""}</div>
+          <div class="sub acct-meta"><span class="inline">${gs || '<span class="muted">sem grupo</span>'}</span><span>${used} publicações nas 24 h</span>${a.followers != null ? `<span>${Number(a.followers).toLocaleString("pt-BR")} seguidores</span>` : ""}${d !== null ? `<span title="Renovação automática da chave">chave até ${fmt.date(a.access_token_expires_at)}</span>` : ""}</div>
           <div class="bar ${used >= 90 ? "bad" : used >= 60 ? "warn" : ""}" style="max-width:220px;margin-top:6px"><i style="width:${Math.min(100, used)}%"></i></div>
         </span>
         <span class="acct-side">
           <span class="pill ${kind}">${esc(label)}</span>
+          ${a.status === "connected" && a.insights_ok === false ? `<button class="btn ghost small accent" data-liberar="${a.id}" title="Reconectar pedindo também as métricas (visualizações, alcance, compartilhamentos e salvos)">Liberar métricas</button>` : a.insights_ok ? `<span class="pill ok" title="Visualizações, alcance, compartilhamentos e salvos de cada post">métricas completas</span>` : ""}
           <span class="inline"><button class="btn ghost small" data-label="${a.id}" title="Apelido" aria-label="Editar apelido">✎</button>${a.status !== "connected" ? `<button class="btn small" data-reconnect="${a.id}">Reconectar</button>` : `<button class="btn ghost small" data-disconnect="${a.id}">Desconectar</button>`}<button class="btn danger small" data-remove="${a.id}">Remover</button></span>
         </span>
       </div>`;
@@ -171,6 +172,12 @@
         const v = await promptDialog(`Apelido para ${handle(a)} (deixe vazio para remover)`, a.label || "", { placeholder: "Ex.: Loja Centro", maxlength: 40 });
         if (v === null) return;
         const { error } = await supa.from("accounts").update({ label: v.trim() || null }).eq("id", a.id); if (error) throw error;
+      } else if (t.dataset.liberar) {
+        const a = accounts.find((x) => x.id === t.dataset.liberar);
+        const rede = a?.platform || "instagram";
+        const passo = rede === "instagram" ? `Antes de continuar, entre no instagram.com com ${handle(a)} neste navegador (a autorização usa a conta que estiver aberta).` : "Na autorização, marque de novo esta conta.";
+        if (!(await confirmDialog(`Liberar as métricas de ${handle(a)}? Vai abrir a autorização de novo, agora pedindo também visualizações, alcance, compartilhamentos e salvos. ${passo} A conta continua a mesma e nada agendado se perde.`, { okLabel: "Abrir autorização" }))) return;
+        await startConnect(rede, true); return;
       } else if (t.dataset.reconnect) {
         const a = accounts.find((x) => x.id === t.dataset.reconnect);
         await startConnect(a?.platform || "instagram", true); return;

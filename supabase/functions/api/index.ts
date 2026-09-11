@@ -23,9 +23,12 @@
 //   PUT    /ai                        liga/troca a chave de IA do time (dono/admin; testa antes de salvar)
 //   DELETE /ai                        desliga a IA do time (dono/admin)
 //   POST   /captions/vary             N variações da legenda com a IA do time
+//   POST   /metrics/sync              atualiza agora seguidores e métricas dos posts do time
+//   POST   /metrics/cron              o mesmo para todos os times (pg_cron, com segredo; sem login)
 
 import { friendlyError } from "../_shared/friendly.ts";
 import { aiRemove, aiSave, aiStatus, varyCaptions } from "../_shared/ia-rotas.ts";
+import { metricsCron, syncTeamManual } from "../_shared/metricas.ts";
 import { listData, pfm, PfmError, pfmListAll, type PfmAccount, type PfmPost, type PfmResult, type PfmWebhook } from "../_shared/pfm.ts";
 import { background, type Caller, corsHeaders, HttpError, json, readJson, requireMember, serviceClient, SUPABASE_URL, teamOf, teamTag } from "../_shared/util.ts";
 
@@ -106,6 +109,8 @@ Deno.serve(async (req) => {
   const db = serviceClient();
 
   try {
+    // O agendador (pg_cron) chama sem usuário: confere o segredo guardado em app_settings.
+    if (req.method === "POST" && path === "/metrics/cron") return json(req, await metricsCron(db, req));
     const caller = await requireMember(req);
 
     if (req.method === "GET" && path === "/health") return json(req, await health(db, caller));
@@ -128,6 +133,7 @@ Deno.serve(async (req) => {
     if (req.method === "GET" && path === "/ai") return json(req, await aiStatus(db, caller));
     if (req.method === "PUT" && path === "/ai") return json(req, await aiSave(db, caller, await readJson<{ key?: string }>(req)));
     if (req.method === "DELETE" && path === "/ai") return json(req, await aiRemove(db, caller));
+    if (req.method === "POST" && path === "/metrics/sync") return json(req, await syncTeamManual(db, caller.teamId));
     if (req.method === "POST" && path === "/captions/vary") return json(req, await varyCaptions(db, caller, await readJson<{ caption?: string; count?: number }>(req)));
 
     throw new HttpError(404, `Rota não encontrada: ${req.method} ${path}`);
@@ -243,7 +249,8 @@ async function connectUrl(db: Db, caller: Caller, body: { platform?: string; rec
       platform,
       platform_data: platformData,
       external_id: teamTag(caller.teamId),
-      permissions: ["posts"],
+      // "feeds" libera visualizações, alcance, compartilhamentos e salvos de cada post (Desempenho)
+      permissions: ["posts", "feeds"],
     },
   });
   return { url: res.url, platform };

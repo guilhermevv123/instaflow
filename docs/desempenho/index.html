@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desempenho · InstaFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/dashboard.css">
+<link rel="stylesheet" href="../assets/desempenho.css">
+<script src="../assets/config.js"></script>
+  <link rel="icon" type="image/svg+xml" href="../assets/brand/instaflow-icon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/brand/favicon-32.png">
+  <link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+  <meta name="theme-color" content="#FF6A00">
+</head>
+<body>
+<header class="top"></header>
+<main class="shell">
+  <div class="page-head">
+    <div><div class="eyebrow" id="quando">Seguidores, visualizações e engajamento</div><h1 class="h1">Desempenho</h1></div>
+    <div class="actions dash-top">
+      <div class="seg" id="period" role="tablist" aria-label="Período"><button type="button" data-d="7">7 dias</button><button type="button" data-d="30" class="on">30 dias</button><button type="button" data-d="90">90 dias</button></div>
+      <button type="button" class="btn ghost" id="refresh">Atualizar agora</button>
+    </div>
+  </div>
+  <div id="avisos" class="stack"></div>
+
+  <div class="dash-sec">Visão geral · posts publicados no período</div>
+  <div class="kpis" id="kpis">
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+  </div>
+
+  <div class="dash-grid2">
+    <section class="chart-card">
+      <div class="chart-head">
+        <div class="chart-title"><span class="ib" data-ico="contas"></span><div><h2>Seguidores</h2><p id="seg-sub">Soma das contas, dia a dia</p></div></div>
+        <div class="dash-tabs" id="seg-tabs"><button type="button" class="chip on" data-t="total">Total</button><button type="button" class="chip" data-t="ganhos">Ganhos por dia</button></div>
+      </div>
+      <div class="ch-wrap" id="ch-seg"><span class="sk" style="display:block;height:240px"></span></div>
+    </section>
+    <section class="chart-card">
+      <div class="chart-head">
+        <div class="chart-title"><span class="ib" data-ico="ritmo"></span><div><h2>O que entrou por dia</h2><p id="nov-sub">Somando todos os posts</p></div></div>
+        <div class="dash-tabs" id="nov-tabs"><button type="button" class="chip on" data-t="inter">Interações</button><button type="button" class="chip" data-t="views">Visualizações</button></div>
+      </div>
+      <div class="ch-wrap" id="ch-nov"><span class="sk" style="display:block;height:240px"></span></div>
+    </section>
+  </div>
+
+  <section class="chart-card">
+    <div class="chart-head">
+      <div class="chart-title"><span class="ib" data-ico="contas"></span><div><h2>Por conta</h2><p>Posts publicados no período · clique no título de uma coluna para ordenar</p></div></div>
+      <a class="small" href="../contas/">Gerenciar contas →</a>
+    </div>
+    <div id="tabela"><span class="sk" style="display:block;height:220px"></span></div>
+  </section>
+
+  <section class="chart-card">
+    <div class="chart-head"><div class="chart-title"><span class="ib" data-ico="ok"></span><div><h2>Melhores posts</h2><p id="top-sub">No período</p></div></div></div>
+    <div id="top"><span class="sk" style="display:block;height:260px"></span></div>
+  </section>
+
+  <section class="chart-card">
+    <div class="chart-head">
+      <div class="chart-title"><span class="ib" data-ico="mes"></span><div><h2>Todos os posts</h2><p>Os números de hoje de cada post, do mais novo para o mais antigo</p></div></div>
+      <select id="filtro-conta" class="input" style="width:auto;max-width:100%" aria-label="Filtrar por conta"><option value="">Todas as contas</option></select>
+    </div>
+    <div id="todos"></div>
+  </section>
+  <p class="help">Os números se atualizam sozinhos a cada 3 horas. Seguidores ganhos saem da diferença entre um dia e outro, a partir da primeira atualização. Visualizações, alcance, compartilhamentos, salvos e tempo assistido só aparecem nas contas com métricas liberadas (Contas → Liberar métricas).</p>
+</main>
+<script type="module">
+  import { supa, requireAuth, api, renderNav, fmt, esc, toast, pageReady, team, handle } from "../assets/app.js";
+  import { paintIcons } from "../assets/dash.js";
+  import { carregar, paintKpis, paintAvisos, paintSeguidores, paintNovas, paintTabela, paintTop, paintTodos } from "../assets/desempenho.js";
+  renderNav("desempenho", "../");
+  paintIcons(document);
+  await requireAuth("../");
+  const $ = (s) => document.querySelector(s);
+
+  let dias = 30, d = null, ord = { k: "seguidores", dir: -1 }, abaSeg = "total", abaNov = "inter", conta = "", limite = 30;
+  try { const x = Number(localStorage.getItem("if.perf.days")); if ([7, 30, 90].includes(x)) dias = x; } catch {}
+  const marca = () => $("#period").querySelectorAll("[data-d]").forEach((b) => { const on = Number(b.dataset.d) === dias; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
+  marca();
+
+  function pintar() {
+    paintKpis($("#kpis"), d);
+    paintAvisos($("#avisos"), d);
+    paintSeguidores($("#ch-seg"), $("#seg-sub"), d, abaSeg);
+    paintNovas($("#ch-nov"), $("#nov-sub"), d, abaNov);
+    paintTabela($("#tabela"), d, ord);
+    paintTop($("#top"), $("#top-sub"), d);
+    const sel = $("#filtro-conta");
+    sel.innerHTML = `<option value="">Todas as contas</option>${d.contas.map((a) => `<option value="${a.id}">${esc(a.label || handle(a))}</option>`).join("")}`;
+    sel.value = conta;
+    paintTodos($("#todos"), d, { conta, limite });
+    $("#quando").textContent = d.atualizado ? `Atualizado ${fmt.relative(d.atualizado)} · sozinho a cada 3 horas` : "Ainda sem números: clique em Atualizar agora";
+  }
+  async function recarregar() {
+    document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = ".55"));
+    try { d = await carregar(supa, team.id, dias); pintar(); }
+    catch (e) { toast(e.message, "error"); }
+    finally { document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = "")); }
+  }
+
+  $("#period").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-d]"); if (!b || Number(b.dataset.d) === dias) return;
+    dias = Number(b.dataset.d);
+    try { localStorage.setItem("if.perf.days", String(dias)); } catch {}
+    marca(); recarregar();
+  });
+  const abas = (id, set) => $(id).addEventListener("click", (e) => {
+    const b = e.target.closest("[data-t]"); if (!b || !d) return;
+    $(id).querySelectorAll("[data-t]").forEach((x) => x.classList.toggle("on", x === b));
+    set(b.dataset.t);
+  });
+  abas("#seg-tabs", (t) => { abaSeg = t; paintSeguidores($("#ch-seg"), $("#seg-sub"), d, abaSeg); });
+  abas("#nov-tabs", (t) => { abaNov = t; paintNovas($("#ch-nov"), $("#nov-sub"), d, abaNov); });
+  $("#tabela").addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-k]"); if (!th || !d || th.dataset.k === "conta") return;
+    ord = ord.k === th.dataset.k ? { k: ord.k, dir: -ord.dir } : { k: th.dataset.k, dir: -1 };
+    paintTabela($("#tabela"), d, ord);
+  });
+  $("#filtro-conta").addEventListener("change", (e) => { conta = e.target.value; limite = 30; paintTodos($("#todos"), d, { conta, limite }); });
+  $("#todos").addEventListener("click", (e) => { const b = e.target.closest("[data-mais]"); if (!b) return; limite = Number(b.dataset.mais); paintTodos($("#todos"), d, { conta, limite }); });
+  $("#refresh").addEventListener("click", async () => {
+    const b = $("#refresh"); b.disabled = true; b.innerHTML = `<span class="spinner"></span> Atualizando…`;
+    try {
+      const r = await api("/metrics/sync", { method: "POST", body: {} });
+      if (r.recente) toast("Os números foram atualizados há menos de 1 minuto.", "info");
+      else toast(`${r.contas} conta${r.contas === 1 ? "" : "s"} e ${r.posts} posts atualizados${r.erros?.length ? ` · ${r.erros.length} com erro (${r.erros[0].conta}: ${r.erros[0].erro})` : "."}`, r.erros?.length ? "info" : "ok", 6500);
+      await recarregar();
+    } catch (err) { toast(err.message, "error"); }
+    finally { b.disabled = false; b.textContent = "Atualizar agora"; }
+  });
+
+  await recarregar();
+  pageReady();
+</script>
+</body>
+</html>

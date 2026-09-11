@@ -1,0 +1,43 @@
+/* InstaFlow · Desempenho (tabelas, melhores posts, aviso de métricas) */
+.perf-aviso { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+.perf-aviso .btn { flex: none; }
+.dash-sec.perf-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dash-sec.perf-head a { text-transform: none; letter-spacing: normal; font-weight: 600; }
+.up { color: var(--ok); }
+.down { color: var(--bad); }
+
+.tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tbl { width: 100%; border-collapse: collapse; font-size: .88rem; min-width: 820px; }
+.tbl th { font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 700; text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tbl th[data-k]:not([data-k="conta"]) { cursor: pointer; user-select: none; }
+.tbl th[data-k]:not([data-k="conta"]):hover { color: var(--ink-2); }
+.tbl th[aria-sort] { color: var(--accent); }
+.tbl td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tbl th:first-child, .tbl td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); z-index: 1; }
+.tbl tbody tr:hover td { background: var(--surface-2); }
+.tbl .cta { display: flex; align-items: center; gap: 8px; min-width: 0; color: inherit; text-decoration: none; }
+.tbl .nome { font-weight: 600; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.tbl .pl .pt { display: grid; min-width: 0; max-width: 260px; }
+.tbl .pl .pt b, .tbl .pl .pt span { overflow: hidden; text-overflow: ellipsis; }
+.tbl a.pill { text-decoration: none; }
+.pthumb { width: 36px; height: 45px; border-radius: 6px; object-fit: cover; background: var(--surface-2); display: block; flex: none; }
+
+.tops { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
+.tp { display: grid; align-content: start; gap: 8px; text-decoration: none; color: inherit; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; transition: border-color .15s, transform .15s; }
+.tp:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); transform: translateY(-2px); }
+.tp .th { aspect-ratio: 4 / 5; background: var(--surface); position: relative; overflow: hidden; display: block; }
+.tp .th img, .tp .th .sem { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tp .tipo, .tp .rank { position: absolute; top: 7px; font-size: .7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgb(0 0 0 / .58); color: #fff; }
+.tp .tipo { left: 7px; }
+.tp .rank { right: 7px; background: var(--brand-grad); color: var(--accent-ink); }
+.tp .meta { display: grid; gap: 3px; padding: 0 10px 11px; min-width: 0; }
+.tp .big { font-size: 1.2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tp .big small { font-size: .74rem; font-weight: 600; color: var(--muted); }
+.tp .sub { font-size: .78rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+img.sem, span.sem { background: repeating-linear-gradient(135deg, var(--surface-2) 0 10px, var(--surface) 10px 20px); }
+@media (prefers-reduced-motion: reduce) { .tp { transition: none; } .tp:hover { transform: none; } }
+
+/* Tabela larga rola dentro do próprio quadro: sem isso o conteúdo de 800+ px
+   estica o cartão (min-width automático de grade) e a página rola para o lado no celular. */
+.chart-card, .chart-card > * { min-width: 0; }
+.chart-head { flex-wrap: wrap; }

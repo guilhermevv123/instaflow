@@ -59,6 +59,9 @@
   document.querySelectorAll("[data-mode]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); setMode(a.dataset.mode); }));
   function say(text, kind = "error") { const m = $("#msg"); m.className = kind === "error" ? "error-box" : "ok-box"; m.textContent = text; m.hidden = false; }
 
+  // Voltou da autorização do Instagram sem sessão neste endereço? Avisa que deu certo.
+  if (/isSuccess=true/.test(decodeURIComponent(next))) say("Instagram conectado com sucesso. Entre para ver a conta em Contas.", "ok");
+  else if (/isSuccess=false/.test(decodeURIComponent(next))) say("O Instagram não autorizou a conexão. Entre e tente de novo em Contas.");
   // Sessão já ativa → segue. Link de recuperação → modo nova senha.
   if (location.hash.includes("type=recovery")) setMode("recovery");
   supa.auth.onAuthStateChange((event) => { if (event === "PASSWORD_RECOVERY") setMode("recovery"); });

@@ -49,6 +49,20 @@ supabase secrets set ALLOWED_ORIGINS=https://<usuario>.github.io
 
 Depois: entre com o e-mail admin ("Primeiro acesso" cria a senha), vá em **Config** → "Testar conexão" e "Registrar avisos", e em **Contas** → "Conectar Instagram".
 
+## Onde está ligado hoje (10/09/2026)
+
+- **Supabase:** projeto `zxaiearxsuulhkfyybke` (us-east-2), o mesmo do app Meu Auxiliar. As tabelas do InstaFlow convivem em `public` sem colisão de nomes; secrets com prefixo (`INSTAFLOW_ALLOWED_ORIGINS`, `POSTFORME_API_KEY`).
+- Esse projeto está em outra conta, então o `supabase link` não funciona por aqui. Deploy sem link:
+  ```bash
+  set -a; . ~/.config/instaflow/supabase.env; set +a   # SUPABASE_ACCESS_TOKEN e SUPABASE_PROJECT_REF
+  supabase functions deploy api --project-ref $SUPABASE_PROJECT_REF --no-verify-jwt --use-api
+  supabase functions deploy pfm-webhook --project-ref $SUPABASE_PROJECT_REF --no-verify-jwt --use-api
+  ```
+  SQL: Management API `POST /v1/projects/<ref>/database/query` (ver histórico em `supabase_migrations.schema_migrations`).
+- **Site:** https://guilhermevv123.github.io/instaflow/ (repo público `guilhermevv123/instaflow`, Pages em `/site`).
+- **Post for Me:** webhook `wbh_12qyxP1lGGAuLCWogv0I` → `…/functions/v1/pfm-webhook` (segredo em `app_settings.pfm_webhook`). Auth callback URL do projeto deve ser `https://guilhermevv123.github.io/instaflow/contas/`.
+- **Auth:** cadastro auto-confirmado; `uri_allow_list` inclui `https://guilhermevv123.github.io/instaflow/**`.
+
 ## Segurança
 
 - A chave do Post for Me só existe nos secrets do Supabase; o navegador nunca a vê.

@@ -6,6 +6,18 @@ export const TZ = "America/Bahia"; // UTC-3, sem horário de verão
 
 // Menu lateral: aplica o estado salvo (recolhido/aberto) antes da primeira pintura.
 try { if (localStorage.getItem("if.side") === "min") document.documentElement.classList.add("side-min"); } catch {}
+
+// Barra fina de progresso no topo enquanto os dados da página carregam.
+const pagebar = document.createElement("div");
+pagebar.className = "pagebar";
+pagebar.setAttribute("aria-hidden", "true");
+document.documentElement.appendChild(pagebar);
+const pagebarTimer = setTimeout(() => pageReady(), 8000);
+export function pageReady() {
+  clearTimeout(pagebarTimer);
+  pagebar.classList.add("done");
+  setTimeout(() => pagebar.remove(), 400);
+}
 export const configured = Boolean(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY);
 
 export const supa = configured
@@ -36,6 +48,7 @@ export async function requireAuth(rootRel = "../") {
     location.replace(`${rootRel}entrar/?semtime=1`);
     return new Promise(() => {});
   }
+  paintNavFoot(data.session.user.email);
   return data.session;
 }
 
@@ -193,7 +206,9 @@ const ICONS = {
 const ico = (k) => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
 
 // Menu lateral retrátil: no computador recolhe para só ícones (lembra a escolha);
-// no celular vira gaveta aberta pelo botão ☰.
+// no celular vira gaveta aberta pelo botão ☰. É pintado na hora em que a página
+// abre (antes da sessão carregar); o rodapé (e-mail e time) entra em paintNavFoot.
+let navRootRel = "../";
 export function renderNav(active, rootRel, email) {
   const items = [
     ["inicio", "Início", ""],
@@ -206,6 +221,7 @@ export function renderNav(active, rootRel, email) {
   ];
   const nav = document.querySelector("header.top");
   if (!nav) return;
+  navRootRel = rootRel;
   const root = document.documentElement;
   nav.id = "menu";
   nav.innerHTML = `
@@ -219,16 +235,8 @@ export function renderNav(active, rootRel, email) {
     <nav class="side-nav" aria-label="Seções">
       ${items.map(([k, label, href]) => `<a href="${rootRel}${href}" class="${k === active ? "on" : ""}" ${k === active ? 'aria-current="page"' : ""} title="${label}">${ico(k)}<span>${label}</span></a>`).join("")}
     </nav>
-    <div class="side-foot">
-      <div class="side-team" title="Time atual">
-        ${teams.length > 1
-          ? `<select id="team-switch" class="side-select" aria-label="Trocar de time">${teams.map((t) => `<option value="${t.id}" ${t.id === team?.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>`
-          : `<span class="side-team-name">${esc(team?.name || "")}</span>`}
-      </div>
-      <div class="side-user" title="${esc(email || "")}"><span class="av">${esc((email || "?")[0].toUpperCase())}</span><span class="side-email">${esc(email || "")}</span></div>
-      <button class="side-link" id="btn-sair" type="button" title="Sair">${ico("sair")}<span>Sair</span></button>
-    </div>`;
-  nav.querySelector("#team-switch")?.addEventListener("change", (e) => switchTeam(e.target.value));
+    <div class="side-foot"></div>`;
+  paintNavFoot(email);
 
   const bar = document.createElement("div");
   bar.className = "mbar";
@@ -269,19 +277,61 @@ export function renderNav(active, rootRel, email) {
   });
   mq.addEventListener?.("change", () => setOpen(false));
   syncToggle();
-  nav.querySelector("#btn-sair")?.addEventListener("click", () => signOut(rootRel));
+}
+
+// Rodapé do menu: time (com seletor se houver mais de um), e-mail e Sair.
+// Antes da sessão carregar mostra placeholders discretos.
+export function paintNavFoot(email) {
+  const foot = document.querySelector("header.top .side-foot");
+  if (!foot) return;
+  const known = Boolean(email || team);
+  foot.innerHTML = `
+    <div class="side-team" title="Time atual">
+      ${!known ? `<span class="sk sk-line" style="width:70%"></span>`
+        : teams.length > 1
+          ? `<select id="team-switch" class="side-select" aria-label="Trocar de time">${teams.map((t) => `<option value="${t.id}" ${t.id === team?.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>`
+          : `<span class="side-team-name">${esc(team?.name || "")}</span>`}
+    </div>
+    <div class="side-user" title="${esc(email || "")}">
+      <span class="av">${known ? esc((email || "?")[0].toUpperCase()) : ""}</span>
+      ${known ? `<span class="side-email">${esc(email || "")}</span>` : `<span class="sk sk-line" style="width:80%"></span>`}
+    </div>
+    <button class="side-link" id="btn-sair" type="button" title="Sair">${ico("sair")}<span>Sair</span></button>`;
+  foot.querySelector("#team-switch")?.addEventListener("change", (e) => switchTeam(e.target.value));
+  foot.querySelector("#btn-sair")?.addEventListener("click", () => signOut(navRootRel));
+}
+
+// Redes suportadas (ids iguais aos do Post for Me).
+export const PLATFORMS = {
+  instagram: { label: "Instagram", short: "Instagram", color: "#E1306C", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.4" cy="6.6" r="1" fill="currentColor" stroke="none"/></svg>', hint: "conta Profissional (Empresa ou Criador)" },
+  facebook: { label: "Facebook (Página)", short: "Facebook", color: "#1877F2", icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.5 22v-8h2.7l.4-3.2h-3.1V8.8c0-.9.3-1.6 1.6-1.6h1.7V4.4c-.3 0-1.3-.1-2.5-.1-2.5 0-4.1 1.5-4.1 4.2v2.3H7.4V14h2.8v8h3.3z"/></svg>', hint: "você precisa administrar a Página" },
+  tiktok: { label: "TikTok", short: "TikTok", color: "#111111", icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.53.02C13.84 0 15.14.01 16.44 0c.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>', hint: "perfil pessoal ou de criador" },
+};
+export function platformOf(acc) { return PLATFORMS[acc?.platform] ? acc.platform : "instagram"; }
+export function platformIcon(p, size = 14) {
+  const pf = PLATFORMS[p] || PLATFORMS.instagram;
+  return `<i class="pf pf-${p}" style="--pf:${pf.color};width:${size}px;height:${size}px" title="${pf.label}" aria-label="${pf.label}">${pf.icon}</i>`;
+}
+export function platformName(p) { return (PLATFORMS[p] || PLATFORMS.instagram).label; }
+// Nome de exibição: @usuario no Instagram/TikTok; nome da Página no Facebook.
+export function handle(acc) {
+  const name = acc?.username || acc?.id || "";
+  return platformOf(acc) === "facebook" ? name : `@${name}`;
 }
 
 export function avatar(acc, size = 28) {
   const letter = (acc?.username || acc?.label || "?")[0].toUpperCase();
-  if (acc?.profile_photo_url) {
-    return `<img class="av" width="${size}" height="${size}" src="${esc(acc.profile_photo_url)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'av',textContent:'${esc(letter)}'}))">`;
-  }
-  return `<span class="av" style="width:${size}px;height:${size}px">${esc(letter)}</span>`;
+  const p = platformOf(acc);
+  const badge = acc?.platform ? platformIcon(p, Math.max(12, Math.round(size * 0.45))) : "";
+  const inner = acc?.profile_photo_url
+    ? `<img class="av" width="${size}" height="${size}" src="${esc(acc.profile_photo_url)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'av',textContent:'${esc(letter)}',style:'width:${size}px;height:${size}px'}))">`
+    : `<span class="av" style="width:${size}px;height:${size}px">${esc(letter)}</span>`;
+  return `<span class="av-wrap" style="width:${size}px;height:${size}px">${inner}${badge}</span>`;
 }
 
 export function accountName(acc) {
-  return acc?.label ? `${acc.label} <span class="muted">@${esc(acc.username || "")}</span>` : `@${esc(acc?.username || acc?.id || "")}`;
+  const h = esc(handle(acc));
+  return acc?.label ? `${esc(acc.label)} <span class="muted">${h}</span>` : h;
 }
 
 export const POST_STATUS = {
@@ -353,6 +403,40 @@ export function qs(name) {
   return new URLSearchParams(location.search).get(name);
 }
 
-export function confirmDialog(text) {
-  return Promise.resolve(window.confirm(text));
+// ---------------------------------------------------------------------------
+// Diálogos do painel (no lugar dos alertas nativos do navegador)
+// ---------------------------------------------------------------------------
+function dialog({ title = "", text = "", okLabel = "OK", cancelLabel = "Cancelar", danger = false, input = null }) {
+  return new Promise((resolve) => {
+    const d = document.createElement("dialog");
+    d.className = "modal ifd";
+    d.innerHTML = `<form class="inner ifd-inner" novalidate>
+      ${title ? `<h2>${esc(title)}</h2>` : ""}
+      <p class="ifd-text">${esc(text)}</p>
+      ${input ? `<input class="input" id="ifd-input" type="text" value="${esc(input.value ?? "")}" placeholder="${esc(input.placeholder ?? "")}" maxlength="${input.maxlength ?? 80}" autocomplete="off">` : ""}
+      <div class="ifd-actions"><button type="button" class="btn ghost" data-act="cancel">${esc(cancelLabel)}</button><button type="submit" class="btn ${danger ? "danger-solid" : ""}" data-act="ok">${esc(okLabel)}</button></div>
+    </form>`;
+    document.body.appendChild(d);
+    const done = (v) => { try { d.close(); } catch {} d.remove(); resolve(v); };
+    d.querySelector('[data-act="cancel"]').addEventListener("click", () => done(input ? null : false));
+    d.querySelector("form").addEventListener("submit", (e) => { e.preventDefault(); done(input ? d.querySelector("#ifd-input").value : true); });
+    d.addEventListener("cancel", (e) => { e.preventDefault(); done(input ? null : false); });
+    d.addEventListener("click", (e) => { if (e.target === d) done(input ? null : false); });
+    d.showModal();
+    const focus = d.querySelector("#ifd-input") || d.querySelector('[data-act="ok"]');
+    focus.focus(); if (focus.select) focus.select();
+  });
+}
+// confirmDialog("Remover?", { okLabel: "Remover", danger: true }) → true/false
+export function confirmDialog(text, opts = {}) { return dialog({ text, ...opts }); }
+// promptDialog("Apelido:", "valor atual", { placeholder }) → string ou null
+export function promptDialog(text, value = "", opts = {}) { return dialog({ text, input: { value, placeholder: opts.placeholder, maxlength: opts.maxlength }, okLabel: opts.okLabel || "Salvar", cancelLabel: opts.cancelLabel || "Cancelar", title: opts.title || "" }); }
+
+// Esqueleto de carregamento (linhas cinza pulsando) para listas e cards.
+export function skeleton(rows = 3, { avatar = true } = {}) {
+  return `<div class="sk-list" aria-busy="true" aria-label="Carregando">${Array.from({ length: rows }, () => `
+    <div class="sk-row">${avatar ? '<span class="sk sk-av"></span>' : ""}<span class="sk-lines"><span class="sk sk-line" style="width:${45 + Math.round(Math.random() * 30)}%"></span><span class="sk sk-line thin" style="width:${25 + Math.round(Math.random() * 30)}%"></span></span><span class="sk sk-pill"></span></div>`).join("")}</div>`;
+}
+export function skeletonGrid(n = 8) {
+  return Array.from({ length: n }, () => '<div class="thumb sk-thumb"><span class="sk" style="position:absolute;inset:0;border-radius:inherit"></span></div>').join("");
 }

@@ -32,9 +32,9 @@
   <div id="list" class="card" hidden></div>
 </main>
 <script type="module">
-  import { supa, requireAuth, renderNav, fmt, esc, postSummaryPill, PLACEMENT, toast } from "../assets/app.js";
+  import { supa, requireAuth, renderNav, fmt, esc, postSummaryPill, PLACEMENT, toast, pageReady } from "../assets/app.js";
+  renderNav("calendario", "../");
   const session = await requireAuth("../");
-  renderNav("calendario", "../", session.user.email);
 
   let view = "month";
   const bahiaNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bahia" }));
@@ -101,6 +101,7 @@
       </a>`).join("")}</div>` : `<div class="empty">Nada agendado neste mês.</div>`;
   }
   render();
+  pageReady();
 </script>
 </body>
 </html>

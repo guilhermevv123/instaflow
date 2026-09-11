@@ -32,7 +32,7 @@
     </section>
     <section class="card">
       <h2>Post for Me</h2>
-      <div id="pfm" class="stack"><span class="muted small">Carregando…</span></div>
+      <div id="pfm" class="stack"><span class="sk sk-line" style="width:60%"></span><span class="sk sk-line" style="width:45%"></span><span class="sk sk-line thin" style="width:70%"></span></div>
       <div class="inline"><button class="btn ghost small" id="test">Testar conexão</button><button class="btn ghost small" id="hook">Registrar/atualizar avisos (webhook)</button><button class="btn ghost small" id="syncall">Conferir publicações pendentes</button></div>
     </section>
     <section class="card">
@@ -46,15 +46,17 @@
         <li>Horários sempre em <b>America/Bahia</b> (UTC−3).</li>
         <li>O Post for Me publica em até 2 minutos após o horário e avisa aqui conta por conta.</li>
         <li>Fotos fora de 4:5–1.91:1 passam pelo <b>✂ Ajustar</b> (cortar ou caber inteira) antes de agendar; a foto sai já no tamanho certo e o Instagram não corta nada.</li>
+        <li><b>Facebook</b> publica em Páginas (cada Página é uma conta); aceita texto, foto, vídeo, Reels, Stories e carrossel só de fotos.</li>
+        <li><b>TikTok</b> aceita um vídeo ou até 32 fotos (nunca misturados), título de até 85 caracteres e privacidade público/privado. Feed/Reels/Stories não se aplicam.</li>
         <li>Chaves das contas renovam sozinhas; se uma conta pedir "Reconectar", basta autorizar de novo.</li>
       </ul>
     </section>
   </div>
 </main>
 <script type="module">
-  import { supa, requireAuth, api, renderNav, fmt, esc, toast, cfg, team, teams } from "../assets/app.js";
+  import { supa, requireAuth, api, renderNav, fmt, esc, toast, cfg, team, teams, confirmDialog, promptDialog, pageReady } from "../assets/app.js";
+  renderNav("config", "../");
   const session = await requireAuth("../");
-  renderNav("config", "../", session.user.email);
   const $ = (s) => document.querySelector(s);
   const isAdmin = ["owner", "admin"].includes(team.role);
   const ROLE = { owner: ["Dono", "acc"], admin: ["Admin", "acc"], editor: ["Editor", "neutral"] };
@@ -79,7 +81,7 @@
     $("#invites").innerHTML = (invites || []).map((i) => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto auto"><span><div class="title">${esc(i.email)}</div><div class="sub">convidado em ${fmt.date(i.created_at)} · entra ao criar a conta</div></span><span class="pill neutral">${(ROLE[i.role] || [i.role])[0]}</span><button class="btn ghost small" data-cancel="${i.id}">Cancelar</button></div>`).join("");
   }
   $("#team").addEventListener("click", async (e) => {
-    const b = e.target.closest("[data-rm]"); if (!b || !confirm(`Remover ${b.dataset.email} do time?`)) return;
+    const b = e.target.closest("[data-rm]"); if (!b) return; if (!(await confirmDialog(`Remover ${b.dataset.email} do time?`, { okLabel: "Remover", danger: true }))) return;
     const { error } = await supa.rpc("team_remove_member", { p_team: team.id, p_user: b.dataset.rm });
     if (error) toast(error.message, "error"); else { toast("Removido do time.", "ok"); loadTeam(); }
   });
@@ -97,12 +99,12 @@
     $("#add-email").value = ""; loadTeam();
   });
   $("#rename").addEventListener("click", async () => {
-    const name = prompt("Nome do time:", team.name); if (name === null) return;
+    const name = await promptDialog("Nome do time", team.name, { okLabel: "Salvar", maxlength: 60 }); if (name === null) return;
     const { error } = await supa.rpc("team_rename", { p_team: team.id, p_name: name.trim() });
     if (error) toast(error.message, "error"); else location.reload();
   });
   $("#leave").addEventListener("click", async () => {
-    if (!confirm(`Sair do time "${team.name}"? Você deixa de ver as contas e publicações dele.`)) return;
+    if (!(await confirmDialog(`Sair do time "${team.name}"? Você deixa de ver as contas e publicações dele.`, { okLabel: "Sair do time", danger: true }))) return;
     const { error } = await supa.rpc("team_remove_member", { p_team: team.id, p_user: session.user.id });
     if (error) { toast(error.message, "error"); return; }
     try { localStorage.removeItem("if.team"); } catch {}
@@ -114,7 +116,7 @@
       const u = await api("/usage");
       const pct = Math.min(100, Math.round((u.month_reserved / u.month_limit) * 100));
       $("#usage").innerHTML = `<div class="split"><b class="num" style="font-size:1.4rem">${u.month_published} <span class="muted" style="font-size:.9rem">publicadas · ${u.month_reserved} usadas ou agendadas de ${u.month_limit}</span></b><span class="muted small">${pct}%</span></div><div class="bar ${pct >= 90 ? "bad" : pct >= 70 ? "warn" : ""}"><i style="width:${pct}%"></i></div>`;
-      $("#limits").textContent = `Limites deste time: ${u.team.max_accounts} contas de Instagram · ${u.month_limit} publicações por mês (conta a conta).`;
+      $("#limits").textContent = `Limites deste time: ${u.team.max_accounts} contas (Instagram, Facebook e TikTok) · ${u.month_limit} publicações por mês (conta a conta).`;
       $("#pfm").innerHTML = `
         <div class="split"><span>Chave da API</span><span class="pill ok">configurada no Supabase</span></div>
         <div class="split"><span>Avisos (webhook)</span>${u.webhook ? `<span class="pill ok">ativo</span>` : `<span class="pill warn">não registrado</span>`}</div>
@@ -127,6 +129,7 @@
   $("#hook").addEventListener("click", async () => { try { const r = await api("/webhooks/setup", { method: "POST", body: {} }); toast(r.created ? "Webhook registrado." : "Webhook já estava ativo.", "ok"); loadUsage(); } catch (e) { toast(e.message, "error"); } });
   $("#syncall").addEventListener("click", async () => { try { const r = await api("/sync", { method: "POST", body: {} }); toast(`${r.checked} publicação(ões) conferida(s).`, "ok"); } catch (e) { toast(e.message, "error"); } });
   await Promise.all([loadTeam(), loadUsage()]);
+  pageReady();
 </script>
 </body>
 </html>

@@ -27,7 +27,7 @@
 
     <div class="hero-copy">
       <h1 class="anim" style="--d: 260ms">Um post.<span class="grad">Todos os seus perfis.</span></h1>
-      <p class="lead anim" style="--d: 380ms">Agende uma vez e o InstaFlow publica no Feed, nos Reels e nos Stories de todas as contas na hora marcada, pela <strong>API oficial do Instagram</strong>.</p>
+      <p class="lead anim" style="--d: 380ms">Agende uma vez e o InstaFlow publica em todas as suas contas de <strong>Instagram, Facebook e TikTok</strong> na hora marcada, pelas APIs oficiais de cada rede.</p>
     </div>
 
     <div class="stage anim" style="--d: 520ms" aria-hidden="true">
@@ -49,7 +49,7 @@
       </div>
       <div class="gcard anim" style="--d: 1040ms">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-        <div><b>Feed, Reels e Stories</b><span>Tudo no mesmo agendamento.</span></div>
+        <div><b>Instagram, Facebook e TikTok</b><span>Feed, Reels, Stories e TikTok no mesmo agendamento.</span></div>
       </div>
       <div class="gcard anim" style="--d: 1180ms">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -112,7 +112,7 @@
 </div>
 
 <script type="module">
-  import { supa, configured, toast, qs } from "../assets/app.js";
+  import { supa, configured, toast, qs, api } from "../assets/app.js";
   const $ = (s) => document.querySelector(s);
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -250,14 +250,15 @@
     // Toda conta nasce no próprio time (ou entra no time que a convidou).
     // Se não achar nenhum, algo falhou no cadastro: avisa em vez de travar.
     let found = false;
-    for (let i = 0; i < 3 && !found; i++) {
+    for (let i = 0; i < 5 && !found; i++) {
       const { data } = await supa.from("team_members").select("team_id").limit(1);
       found = Boolean(data?.length);
-      if (!found) await new Promise((ok) => setTimeout(ok, 400));
+      if (!found) await new Promise((ok) => setTimeout(ok, 500));
     }
+    // Segunda opinião pelo servidor (não depende do RLS nem do cache do token).
+    if (!found) { try { const t = await api("/team"); found = Boolean(t?.id); } catch {} }
     if (!found) {
-      await supa.auth.signOut();
-      say("Sua conta foi criada, mas o time ainda não apareceu. Tente entrar de novo em alguns segundos.");
+      say("Entrou, mas o seu time ainda não apareceu. Espere alguns segundos e clique em Entrar de novo.");
       shake();
       return;
     }

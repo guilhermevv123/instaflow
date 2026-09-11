@@ -17,14 +17,22 @@
 <header class="top"></header>
 <main class="shell">
   <div class="page-head">
-    <div><div class="eyebrow">Instagram</div><h1 class="h1">Contas conectadas</h1></div>
-    <div class="actions"><button class="btn ghost" id="sync">Sincronizar</button><button class="btn" id="connect">+ Conectar Instagram</button></div>
+    <div><div class="eyebrow">Instagram · Facebook · TikTok</div><h1 class="h1">Contas conectadas</h1></div>
+    <div class="actions"><button class="btn ghost" id="sync">Sincronizar</button>
+      <div class="menu-wrap"><button class="btn" id="connect" aria-haspopup="menu" aria-expanded="false">+ Conectar</button>
+        <div class="menu" id="connect-menu" role="menu" hidden>
+          <button type="button" role="menuitem" data-p="instagram"></button>
+          <button type="button" role="menuitem" data-p="facebook"></button>
+          <button type="button" role="menuitem" data-p="tiktok"></button>
+        </div>
+      </div>
+    </div>
   </div>
   <div id="notice"></div>
   <div class="grid" style="grid-template-columns: minmax(0, 1.6fr) minmax(280px, .8fr)">
     <section class="card">
-      <div class="split"><h2 id="count">Contas</h2><span class="muted small">A barra mostra os posts das últimas 24 h (limite do Instagram: 100)</span></div>
-      <div class="list" id="list"><div class="empty">Carregando…</div></div>
+      <div class="split"><h2 id="count">Contas</h2><span class="muted small">A barra mostra as publicações das últimas 24 h (o Instagram limita a 100)</span></div>
+      <div class="list" id="list"><div class="sk-list" aria-busy="true"><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:55%"></span><span class="sk sk-line thin" style="width:35%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:65%"></span><span class="sk sk-line thin" style="width:30%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:48%"></span><span class="sk sk-line thin" style="width:40%"></span></span><span class="sk sk-pill"></span></div></div></div>
     </section>
     <div class="stack" style="gap:16px">
       <section class="card">
@@ -33,12 +41,10 @@
         <div class="list" id="groups"></div>
       </section>
       <section class="card">
-        <h3>A conta precisa ser Profissional</h3>
-        <ol class="small muted" style="margin:0;padding-left:18px;display:grid;gap:4px">
-          <li>No app do Instagram: Perfil → ☰ → Configurações → Tipo de conta e ferramentas.</li>
-          <li>Toque em "Mudar para conta profissional" e escolha Empresa ou Criador.</li>
-          <li>Volte aqui e clique em "Conectar Instagram". Autorize na tela do Instagram.</li>
-        </ol>
+        <h2>Como conectar</h2>
+        <div class="net-card"><h3 id="h-ig">Instagram</h3><ol class="small muted" style="margin:0;padding-left:18px;display:grid;gap:3px"><li>A conta precisa ser <b>Profissional</b>: no app, Perfil → ☰ → Configurações → Tipo de conta e ferramentas → "Mudar para conta profissional".</li><li>Entre no Instagram <b>com a conta certa</b> no navegador antes de conectar (a autorização usa a conta logada).</li></ol></div>
+        <div class="net-card"><h3 id="h-fb">Facebook</h3><p class="small muted" style="margin:0">Publica em <b>Páginas</b>. Você precisa ser administrador da Página. Na autorização, marque as Páginas que quer usar: cada uma vira uma conta aqui.</p></div>
+        <div class="net-card"><h3 id="h-tt">TikTok</h3><p class="small muted" style="margin:0">Perfil pessoal ou de criador. Entre no TikTok com a conta certa no navegador antes de conectar. Se o TikTok publicar como privado, mude a privacidade na tela Criar.</p></div>
         <p class="help">A autorização passa pelo app "Post for Me", nosso parceiro de publicação. Nenhuma senha é guardada.</p>
       </section>
     </div>
@@ -51,7 +57,7 @@
   </form></dialog>
 </main>
 <script type="module">
-  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountHealth, loadAccounts, loadGroups, toast, daysUntil, team } from "../assets/app.js";
+  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountHealth, loadAccounts, loadGroups, toast, daysUntil, team, confirmDialog, promptDialog, pageReady, PLATFORMS, platformIcon, platformName, handle } from "../assets/app.js";
   // Voltou da autorização do Instagram dentro da janela pop-up: avisa a página
   // que abriu (seja ela local, no GitHub Pages ou num domínio próprio) e fecha.
   // Assim a sessão de quem clicou nunca se perde por causa do endereço de retorno.
@@ -66,8 +72,8 @@
       await new Promise(() => {});
     }
   }
+  renderNav("contas", "../");
   const session = await requireAuth("../");
-  renderNav("contas", "../", session.user.email);
   const $ = (s) => document.querySelector(s);
   let accounts = [], groups = [], usage = new Map();
 
@@ -88,14 +94,23 @@
   // aviso para esta página, que sincroniza. Se o navegador bloquear pop-ups,
   // segue na mesma aba como antes.
   let popup = null, popupTimer = null;
-  async function startConnect(reconnect = false) {
+  // menu de redes
+  const menu = $("#connect-menu");
+  for (const b of menu.querySelectorAll("[data-p]")) { const pf = PLATFORMS[b.dataset.p]; b.innerHTML = `${platformIcon(b.dataset.p, 26)}<span>${esc(pf.label)}<small>${esc(pf.hint)}</small></span>`; }
+  for (const [id, p] of [["#h-ig", "instagram"], ["#h-fb", "facebook"], ["#h-tt", "tiktok"]]) $(id).innerHTML = `${platformIcon(p, 20)} ${esc(PLATFORMS[p].label)}`;
+  const openMenu = (on) => { menu.hidden = !on; $("#connect").setAttribute("aria-expanded", String(on)); };
+  document.addEventListener("click", (e) => { if (!e.target.closest(".menu-wrap")) openMenu(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") openMenu(false); });
+  menu.addEventListener("click", (e) => { const b = e.target.closest("[data-p]"); if (!b) return; openMenu(false); startConnect(b.dataset.p, false); });
+
+  async function startConnect(platform = "instagram", reconnect = false) {
     const b = $("#connect"); b.disabled = true;
     try {
-      const { url } = await api("/accounts/connect", { method: "POST", body: { reconnect } });
+      const { url } = await api("/accounts/connect", { method: "POST", body: { platform, reconnect } });
       const w = window.open(url, "instaflow_connect", "popup=yes,width=620,height=780");
       if (!w) { location.href = url; return; }
       popup = w;
-      $("#notice").innerHTML = `<div class="warn-box">Autorize na janela que abriu. Quando terminar, a conta aparece aqui sozinha.</div>`;
+      $("#notice").innerHTML = `<div class="warn-box">Autorize o ${esc(platformName(platform))} na janela que abriu. Quando terminar, a conta aparece aqui sozinha.</div>`;
       clearInterval(popupTimer);
       popupTimer = setInterval(async () => {
         if (popup && popup.closed) { clearInterval(popupTimer); popup = null; b.disabled = false; await syncNow(false); }
@@ -111,7 +126,7 @@
       : `<div class="error-box">Não foi possível conectar. ${esc(String(d.error || "").split("|").join(" · ")) || "Confira se a conta é Profissional e tente de novo."}</div>`;
     await syncNow(false);
   });
-  $("#connect").addEventListener("click", () => startConnect(false));
+  $("#connect").addEventListener("click", (e) => { e.stopPropagation(); openMenu(menu.hidden); });
   $("#sync").addEventListener("click", () => syncNow(true));
   async function syncNow(announce) {
     const b = $("#sync"); b.disabled = true; b.innerHTML = `<span class="spinner"></span> Sincronizando…`;
@@ -133,8 +148,8 @@
       return `<div class="row" style="grid-template-columns:auto minmax(0,1fr) auto">
         ${avatar(a, 36)}
         <span>
-          <div class="title">${a.label ? `${esc(a.label)} <span class="muted">· </span>` : ""}@${esc(a.username || a.id)} <button class="btn ghost small" data-label="${a.id}" title="Apelido">✎</button></div>
-          <div class="sub inline">${gs || '<span class="muted">sem grupo</span>'} · <span>${used} de 100 nas 24 h</span>${d !== null ? ` · <span title="Renovação automática da chave">chave até ${fmt.date(a.access_token_expires_at)}</span>` : ""}</div>
+          <div class="title">${a.label ? `${esc(a.label)} <span class="muted">· </span>` : ""}${esc(handle(a))} <span class="muted small">· ${esc(platformName(a.platform))}</span> <button class="btn ghost small" data-label="${a.id}" title="Apelido">✎</button></div>
+          <div class="sub inline">${gs || '<span class="muted">sem grupo</span>'} · <span>${used} publicações nas 24 h</span>${d !== null ? ` · <span title="Renovação automática da chave">chave até ${fmt.date(a.access_token_expires_at)}</span>` : ""}</div>
           <div class="bar ${used >= 90 ? "bad" : used >= 60 ? "warn" : ""}" style="max-width:220px;margin-top:6px"><i style="width:${Math.min(100, used)}%"></i></div>
         </span>
         <span class="stack" style="justify-items:end">
@@ -142,7 +157,7 @@
           <span class="inline">${a.status !== "connected" ? `<button class="btn small" data-reconnect="${a.id}">Reconectar</button>` : `<button class="btn ghost small" data-disconnect="${a.id}">Desconectar</button>`}<button class="btn danger small" data-remove="${a.id}">Remover</button></span>
         </span>
       </div>`;
-    }).join("") : `<div class="empty">Nenhuma conta ainda. Clique em <b>Conectar Instagram</b>.</div>`;
+    }).join("") : `<div class="empty">Nenhuma conta ainda. Clique em <b>+ Conectar</b> e escolha a rede.</div>`;
     $("#groups").innerHTML = groups.length ? groups.map((g) => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto"><span><div class="title">${esc(g.name)}</div><div class="sub">${g.account_ids.length} conta${g.account_ids.length === 1 ? "" : "s"}</div></span><button class="btn ghost small" data-edit-group="${g.id}">Editar</button></div>`).join("") : `<div class="empty small">Nenhum grupo.</div>`;
   }
 
@@ -151,16 +166,17 @@
     try {
       if (t.dataset.label) {
         const a = accounts.find((x) => x.id === t.dataset.label);
-        const v = prompt(`Apelido para @${a.username} (vazio para remover):`, a.label || "");
+        const v = await promptDialog(`Apelido para ${handle(a)} (deixe vazio para remover)`, a.label || "", { placeholder: "Ex.: Loja Centro", maxlength: 40 });
         if (v === null) return;
         const { error } = await supa.from("accounts").update({ label: v.trim() || null }).eq("id", a.id); if (error) throw error;
       } else if (t.dataset.reconnect) {
-        await startConnect(true); return;
+        const a = accounts.find((x) => x.id === t.dataset.reconnect);
+        await startConnect(a?.platform || "instagram", true); return;
       } else if (t.dataset.disconnect) {
-        if (!confirm("Desconectar esta conta? Publicações agendadas para ela vão falhar até reconectar.")) return;
+        if (!(await confirmDialog("Desconectar esta conta? Publicações agendadas para ela vão falhar até reconectar.", { okLabel: "Desconectar", danger: true }))) return;
         await api(`/accounts/${t.dataset.disconnect}/disconnect`, { method: "POST", body: {} }); toast("Conta desconectada.", "ok");
       } else if (t.dataset.remove) {
-        if (!confirm("Remover esta conta do painel? Se ela tiver histórico, fica arquivada.")) return;
+        if (!(await confirmDialog("Remover esta conta do painel? Se ela tiver histórico, fica arquivada.", { okLabel: "Remover", danger: true }))) return;
         const r = await api(`/accounts/${t.dataset.remove}`, { method: "DELETE" }); toast(r.archived ? "Conta arquivada." : "Conta removida.", "ok");
       }
       await load();
@@ -174,13 +190,13 @@
     $("#group-title").textContent = g ? "Editar grupo" : "Novo grupo";
     $("#group-name").value = g?.name || "";
     $("#group-delete").hidden = !g;
-    $("#group-accts").innerHTML = accounts.map((a) => `<label><input type="checkbox" value="${a.id}" ${g?.account_ids.includes(a.id) ? "checked" : ""}>${avatar(a, 24)}<span class="name">@${esc(a.username || a.id)}</span><span></span></label>`).join("") || `<div class="empty small">Conecte contas primeiro.</div>`;
+    $("#group-accts").innerHTML = accounts.map((a) => `<label><input type="checkbox" value="${a.id}" ${g?.account_ids.includes(a.id) ? "checked" : ""}>${avatar(a, 24)}<span class="name">${esc(handle(a))}</span><span></span></label>`).join("") || `<div class="empty small">Conecte contas primeiro.</div>`;
     dlg.showModal();
   }
   $("#new-group").addEventListener("click", () => openGroup(null));
   $("#groups").addEventListener("click", (e) => { const b = e.target.closest("[data-edit-group]"); if (b) openGroup(groups.find((g) => g.id === b.dataset.editGroup)); });
   $("#group-close").addEventListener("click", () => dlg.close());
-  $("#group-delete").addEventListener("click", async () => { if (!editing || !confirm("Excluir este grupo?")) return; await supa.from("account_groups").delete().eq("id", editing.id); dlg.close(); toast("Grupo excluído.", "ok"); await load(); });
+  $("#group-delete").addEventListener("click", async () => { if (!editing) return; if (!(await confirmDialog("Excluir este grupo?", { okLabel: "Excluir", danger: true }))) return; await supa.from("account_groups").delete().eq("id", editing.id); dlg.close(); toast("Grupo excluído.", "ok"); await load(); });
   $("#group-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = $("#group-name").value.trim(); if (!name) return;
@@ -196,6 +212,7 @@
   });
 
   await load();
+  pageReady();
   if (!params.has("isSuccess")) syncNow(false);
 </script>
 </body>

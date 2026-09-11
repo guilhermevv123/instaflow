@@ -1,7 +1,7 @@
 # InstaFlow
 
-Um post agendado → publicado em várias contas de Instagram na hora marcada.
-Painel estático (GitHub Pages) + Supabase (banco, login e duas funções) + [Post for Me](https://www.postforme.dev) (API que conecta as contas, hospeda a mídia, agenda e publica pela API oficial do Instagram).
+Um post agendado → publicado em várias contas de **Instagram, Facebook (Páginas) e TikTok** na hora marcada.
+Painel estático (GitHub Pages) + Supabase (banco, login e duas funções) + [Post for Me](https://www.postforme.dev) (API que conecta as contas, hospeda a mídia, agenda e publica pelas APIs oficiais de cada rede).
 
 ```
 docs/                  painel (HTML/CSS/JS, sem build)
@@ -28,9 +28,19 @@ scripts/publish-site.sh  cria o repo público e ativa o GitHub Pages
 - Limites por time (`max_accounts` 20, `max_posts_month` 300, conta a conta) — a função `api` recusa acima disso. Ajuste no banco se precisar.
 - Post for Me é um projeto só para todos os times: o link "Conectar Instagram" leva `external_id = ifteam_<team_id>_xxxx`, e é por isso que o webhook e o `sync` sabem de que time é cada conta.
 
+## Redes
+
+| Rede | O que vira uma conta | Aceita | Regras que o painel aplica |
+|---|---|---|---|
+| Instagram | perfil Profissional (login do Instagram, sem Página) | foto, vídeo/Reels, Stories, carrossel ≤ 10 | Feed exige 4:5–1.91:1 (✂ Ajustar), legenda obrigatória, 100 posts/24 h |
+| Facebook | cada Página escolhida na autorização | texto puro, foto, vídeo, Reels, Stories, carrossel só de fotos | Reels = 1 vídeo; Stories = 1 mídia; legenda opcional com mídia |
+| TikTok | perfil (Login Kit) | 1 vídeo (MP4/MOV/WebM) ou 1–32 fotos (≤ 20 MB cada) | nunca misturar; título ≤ 85; privacidade público/privado; opções de comentário/dueto/stitch/marca/IA/música |
+
+"Tipo" (Feed/Reels/Stories) vale para Instagram e Facebook; o TikTok recebe a mídia como está. A publicação vai com `platform_configurations` por rede (`instagram`, `facebook`, `tiktok`) e as opções ficam em `posts.options` no mesmo formato. No Post for Me, cada rede precisa ser ativada uma vez em **Setup → Get Started** (a API responde "Social provider app credentials not found" até isso).
+
 ## Como funciona
 
-1. **Contas** → "Conectar Instagram" abre a autorização oficial numa janela pop-up; ao voltar, a janela avisa a página que abriu (`postMessage`) e fecha — a sessão de quem clicou nunca se perde, seja no local, no Pages ou num domínio próprio. Sem pop-up, segue na mesma aba.
+1. **Contas** → "+ Conectar" → escolhe a rede; a autorização oficial abre numa janela pop-up; ao voltar, a janela avisa a página que abriu (`postMessage`) e fecha — a sessão de quem clicou nunca se perde, seja no local, no Pages ou num domínio próprio. Sem pop-up, segue na mesma aba.
 2. **Criar** → tipo (Feed, Reels, Stories), mídia (sobe direto para o Post for Me), legenda (com variação por conta), contas/grupos, data e hora (Bahia). Foto fora de 4:5–1.91:1 abre o **✂ Ajustar** (`assets/cropper.js`): proporção, zoom/arrastar (Cortar) ou Caber inteira com fundo (cor da foto, desfocado, branco, preto). Sai JPEG 92% com até 1440 px de largura e vai com `skip_processing: true`. Foto com menos de 1080 px de largura recebe aviso de nitidez.
 3. A função `api` cria **1 post no Post for Me com N contas** e grava `posts` + `post_targets` (uma linha por conta).
 4. No horário, o Post for Me publica (checa a cada 2 min) e chama `pfm-webhook` com o resultado de cada conta. A **Fila** mostra publicado/falhou/link do post; "Atualizar status" confere direto na API se algum aviso se perder.

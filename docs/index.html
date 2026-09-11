@@ -29,9 +29,9 @@
   <section class="card"><div class="split"><h2>Contas</h2><a class="small" href="contas/">Gerenciar →</a></div><div class="list" id="accounts"></div></section>
 </main>
 <script type="module">
-  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountName, accountHealth, postSummaryPill, PLACEMENT, toast } from "./assets/app.js";
+  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountName, accountHealth, postSummaryPill, PLACEMENT, toast, pageReady } from "./assets/app.js";
+  renderNav("inicio", "./");
   const session = await requireAuth("./");
-  renderNav("inicio", "./", session.user.email);
   document.getElementById("today").textContent = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Bahia", weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
   const nowIso = new Date().toISOString();
@@ -44,7 +44,7 @@
   async function load() {
     const [{ data: next }, { data: failed }, { data: accounts }, { data: todayPosts }] = await Promise.all([
       supa.from("post_overview").select("*").in("status", ["scheduled", "processing"]).order("scheduled_at", { ascending: true, nullsFirst: true }).limit(8),
-      supa.from("post_targets").select("post_id, account_id, error, updated_at, posts!inner(title, caption, scheduled_at), accounts!inner(username, label)").eq("status", "failed").gte("updated_at", new Date(Date.now() - 7 * 86400000).toISOString()).order("updated_at", { ascending: false }).limit(8),
+      supa.from("post_targets").select("post_id, account_id, error, updated_at, posts!inner(title, caption, scheduled_at), accounts!inner(username, label, platform)").eq("status", "failed").gte("updated_at", new Date(Date.now() - 7 * 86400000).toISOString()).order("updated_at", { ascending: false }).limit(8),
       supa.from("accounts").select("*").eq("archived", false).order("username"),
       supa.from("post_overview").select("id, targets_total").gte("scheduled_at", dayStart.toISOString()).lt("scheduled_at", new Date(dayStart.getTime() + 86400000).toISOString()).neq("status", "canceled"),
     ]);
@@ -85,7 +85,7 @@
       return `<div class="row">${avatar(a)}<span><div class="title">${accountName(a)}</div><div class="sub">${used} de 100 posts nas últimas 24 h</div></span><span class="pill ${kind}">${esc(label)}</span></div>`;
     }).join("") : `<div class="empty">Nenhuma conta conectada.</div>`;
   }
-  load().catch((e) => toast(e.message, "error"));
+  load().catch((e) => toast(e.message, "error")).finally(pageReady);
 </script>
 </body>
 </html>

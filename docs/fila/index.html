@@ -23,14 +23,14 @@
   <div class="seg" id="tabs">
     <button data-t="upcoming" class="on">Próximas</button><button data-t="running">Em andamento</button><button data-t="done">Concluídas</button><button data-t="failed">Com falhas</button><button data-t="canceled">Canceladas</button>
   </div>
-  <section class="card"><div class="list" id="list"><div class="empty">Carregando…</div></div></section>
+  <section class="card"><div class="list" id="list"><div class="sk-list" aria-busy="true"><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:55%"></span><span class="sk sk-line thin" style="width:35%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:65%"></span><span class="sk sk-line thin" style="width:30%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:48%"></span><span class="sk sk-line thin" style="width:40%"></span></span><span class="sk sk-pill"></span></div></div></div></section>
 
   <dialog class="modal" id="dlg"><div class="inner" id="dlg-inner"></div></dialog>
 </main>
 <script type="module">
-  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, postSummaryPill, pill, TARGET_STATUS, PLACEMENT, toast, qs } from "../assets/app.js";
+  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, postSummaryPill, pill, TARGET_STATUS, PLACEMENT, toast, qs, confirmDialog, pageReady } from "../assets/app.js";
+  renderNav("fila", "../");
   const session = await requireAuth("../");
-  renderNav("fila", "../", session.user.email);
   const $ = (s) => document.querySelector(s);
   let tab = qs("tab") || "upcoming", posts = [], accounts = new Map();
 
@@ -107,12 +107,13 @@
     if (!dlg.open) dlg.showModal();
     $("#dlg-close").onclick = () => { dlg.close(); history.replaceState({}, "", location.pathname + (tab !== "upcoming" ? `?tab=${tab}` : "")); };
     $("#act-sync").onclick = async () => { try { const r = await api(`/posts/${id}/sync`, { method: "POST", body: {} }); toast(`Status: ${r.status} · ${r.results} resultado(s).`, "ok"); await load(); openPost(id); } catch (e) { toast(e.message, "error"); } };
-    $("#act-retry")?.addEventListener("click", async () => { if (!confirm(`Publicar agora nas ${failed} contas que falharam?`)) return; try { const r = await api(`/posts/${id}/retry`, { method: "POST", body: {} }); toast("Reenvio criado.", "ok"); await load(); openPost(r.id); } catch (e) { toast(e.message, "error"); } });
-    $("#act-cancel")?.addEventListener("click", async () => { if (!confirm("Cancelar este agendamento em todas as contas?")) return; try { await api(`/posts/${id}`, { method: "DELETE" }); toast("Agendamento cancelado.", "ok"); dlg.close(); await load(); } catch (e) { toast(e.message, "error"); } });
+    $("#act-retry")?.addEventListener("click", async () => { if (!(await confirmDialog(`Publicar agora nas ${failed} contas que falharam?`, { okLabel: "Publicar agora" }))) return; try { const r = await api(`/posts/${id}/retry`, { method: "POST", body: {} }); toast("Reenvio criado.", "ok"); await load(); openPost(r.id); } catch (e) { toast(e.message, "error"); } });
+    $("#act-cancel")?.addEventListener("click", async () => { if (!(await confirmDialog("Cancelar este agendamento em todas as contas?", { okLabel: "Cancelar agendamento", cancelLabel: "Manter", danger: true }))) return; try { await api(`/posts/${id}`, { method: "DELETE" }); toast("Agendamento cancelado.", "ok"); dlg.close(); await load(); } catch (e) { toast(e.message, "error"); } });
   }
   dlg.addEventListener("close", () => history.replaceState({}, "", location.pathname + (tab !== "upcoming" ? `?tab=${tab}` : "")));
 
   await load();
+  pageReady();
   // confere em segundo plano o que já deveria ter saído
   api("/sync", { method: "POST", body: {} }).then((r) => { if (r.checked) load(); }).catch(() => {});
 </script>

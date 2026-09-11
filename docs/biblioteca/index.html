@@ -22,14 +22,14 @@
   </div>
   <input id="file" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" hidden>
   <div id="progress" class="stack"></div>
-  <div class="media-grid" id="grid"><div class="empty">Carregando…</div></div>
+  <div class="media-grid" id="grid"><div class="thumb sk-thumb"><span class="sk" style="position:absolute;inset:0;border-radius:inherit"></span></div><div class="thumb sk-thumb"><span class="sk" style="position:absolute;inset:0;border-radius:inherit"></span></div><div class="thumb sk-thumb"><span class="sk" style="position:absolute;inset:0;border-radius:inherit"></span></div><div class="thumb sk-thumb"><span class="sk" style="position:absolute;inset:0;border-radius:inherit"></span></div><div class="thumb sk-thumb"><span class="sk" style="position:absolute;inset:0;border-radius:inherit"></span></div><div class="thumb sk-thumb"><span class="sk" style="position:absolute;inset:0;border-radius:inherit"></span></div><div class="thumb sk-thumb"><span class="sk" style="position:absolute;inset:0;border-radius:inherit"></span></div><div class="thumb sk-thumb"><span class="sk" style="position:absolute;inset:0;border-radius:inherit"></span></div></div>
   <p class="help">Clique para selecionar. Os arquivos ficam hospedados no Post for Me; excluir aqui só remove da lista.</p>
 </main>
 <script type="module">
-  import { supa, requireAuth, renderNav, fmt, esc, toast } from "../assets/app.js";
+  import { supa, requireAuth, renderNav, fmt, esc, toast, confirmDialog, pageReady } from "../assets/app.js";
   import { probe, uploadFile, kindOf } from "../assets/media.js";
+  renderNav("biblioteca", "../");
   const session = await requireAuth("../");
-  renderNav("biblioteca", "../", session.user.email);
   const $ = (s) => document.querySelector(s);
   let items = [], sel = new Set();
 
@@ -48,7 +48,7 @@
   }
   $("#grid").addEventListener("click", async (e) => {
     const del = e.target.closest("[data-del]");
-    if (del) { e.stopPropagation(); if (!confirm("Remover esta mídia da biblioteca?")) return; await supa.from("media").delete().eq("id", del.dataset.del); sel.delete(del.dataset.del); await load(); return; }
+    if (del) { e.stopPropagation(); if (!(await confirmDialog("Remover esta mídia da biblioteca?", { okLabel: "Remover", danger: true }))) return; await supa.from("media").delete().eq("id", del.dataset.del); sel.delete(del.dataset.del); await load(); return; }
     const t = e.target.closest("[data-id]"); if (!t) return;
     sel.has(t.dataset.id) ? sel.delete(t.dataset.id) : sel.add(t.dataset.id);
     t.classList.toggle("on", sel.has(t.dataset.id));
@@ -67,6 +67,7 @@
     await load();
   });
   await load();
+  pageReady();
 </script>
 </body>
 </html>

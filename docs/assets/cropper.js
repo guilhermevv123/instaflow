@@ -8,7 +8,19 @@ export const RATIOS = {
   timeline: [["4:5", 4 / 5, "Vertical 4:5"], ["1:1", 1, "Quadrado 1:1"], ["1.91:1", 1.91, "Paisagem 1.91:1"]],
   stories: [["9:16", 9 / 16, "Story 9:16"]],
   reels: [["9:16", 9 / 16, "Reels 9:16"]],
+  // TikTok (fotos): as quatro proporções que ele aceita
+  tiktok: [["9:16", 9 / 16, "Vertical 9:16"], ["3:4", 3 / 4, "Vertical 3:4"], ["1:1", 1, "Quadrado 1:1"], ["16:9", 16 / 9, "Paisagem 16:9"]],
+  // Facebook aceita qualquer proporção; estas são as que ficam bem no feed
+  facebook: [["4:5", 4 / 5, "Vertical 4:5"], ["1:1", 1, "Quadrado 1:1"], ["1.91:1", 1.91, "Paisagem 1.91:1"], ["9:16", 9 / 16, "Vertical 9:16"]],
 };
+// Proporções a oferecer conforme as redes escolhidas (o Instagram é o mais rígido, manda).
+export function ratiosFor(platforms, placement) {
+  const p = platforms && platforms.size ? platforms : new Set(["instagram"]);
+  if (p.has("instagram")) return RATIOS[placement] || RATIOS.timeline;
+  if (p.has("facebook") && (placement === "stories" || placement === "reels")) return RATIOS.stories;
+  if (p.has("tiktok") && !p.has("facebook")) return RATIOS.tiktok;
+  return RATIOS.facebook;
+}
 const FEED_MIN = 4 / 5, FEED_MAX = 1.91;
 const MAX_W = 1440, IDEAL_W = 1080, MIN_W = 320;
 
@@ -84,15 +96,16 @@ function edgeColor(img) {
 }
 
 // Abre o editor. Devolve { blob, width, height, ratioKey, mode } ou null se cancelar.
-export function openCropper({ src, placement = "timeline", ratioKey, mode = "cover", name = "foto" }) {
+export function openCropper({ src, placement = "timeline", ratioKey, mode = "cover", name = "foto", ratios: ratiosOverride }) {
   return new Promise(async (resolve) => {
     const dlg = ensureDialog();
     const $ = (s) => dlg.querySelector(s);
     let img;
     try { img = await loadImage(src); } catch (e) { resolve({ error: e.message }); return; }
     const iw = img.naturalWidth, ih = img.naturalHeight;
-    const ratios = RATIOS[placement] || RATIOS.timeline;
-    const st = { ratioKey: ratioKey || suggestRatio(iw, ih, placement), mode, zoom: 1, ox: 0, oy: 0, bg: "auto" };
+    const ratios = ratiosOverride || RATIOS[placement] || RATIOS.timeline;
+    const suggested = ratios.find(([k]) => k === (ratioKey || suggestRatio(iw, ih, placement))) ? (ratioKey || suggestRatio(iw, ih, placement)) : ratios[0][0];
+    const st = { ratioKey: suggested, mode, zoom: 1, ox: 0, oy: 0, bg: "auto" };
     const auto = edgeColor(img);
     const canvas = $("#crop-canvas"), ctx = canvas.getContext("2d");
     const dpr = Math.min(window.devicePixelRatio || 1, 2);

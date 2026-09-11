@@ -26,6 +26,7 @@
         <div class="field"><span class="label">Tipo</span>
           <div class="seg" id="placement"><button type="button" data-v="timeline" class="on">Feed</button><button type="button" data-v="reels">Reels</button><button type="button" data-v="stories">Stories</button></div>
           <p class="help" id="placement-help">Feed: 1 foto/vídeo ou carrossel de até 10 itens.</p>
+          <p class="help">Feed, Reels e Stories valem para Instagram e Facebook. O TikTok recebe o vídeo ou as fotos do jeito que estão.</p>
         </div>
         <div class="field"><span class="label">Mídia</span>
           <div class="drop" id="drop">Arraste fotos ou vídeos aqui, ou <u>clique para escolher</u>. <span class="small">JPG, PNG, WebP, MP4, MOV.</span></div>
@@ -38,15 +39,38 @@
           <div class="split"><span class="help" id="cap-count">0 / 2200</span><label class="check small"><input type="checkbox" id="vary"> Variar a legenda por conta</label></div>
         </div>
         <div id="overrides" class="stack" hidden></div>
-        <div id="reels-opts" class="stack" hidden>
-          <label class="check"><input type="checkbox" id="share_to_feed" checked> Mostrar o Reels também no Feed</label>
+        <div class="net-card" id="ig-opts" hidden>
+          <h3 id="ig-opts-h">Instagram</h3>
+          <div id="reels-opts" class="stack" hidden><label class="check"><input type="checkbox" id="share_to_feed" checked> Mostrar o Reels também no Feed</label></div>
+          <div class="field" id="collab-field"><label for="collaborators">Colaboradores (opcional, até 3 @usuários separados por vírgula)</label><input id="collaborators" type="text" placeholder="@parceiro, @loja2"></div>
         </div>
-        <div class="field" id="collab-field"><label for="collaborators">Colaboradores (opcional, até 3 @usuários separados por vírgula)</label><input id="collaborators" type="text" placeholder="@parceiro, @loja2"></div>
+        <div class="net-card" id="fb-opts" hidden>
+          <h3 id="fb-opts-h">Facebook</h3>
+          <p class="help">Publica na Página. Feed, Reels e Stories seguem o "Tipo" acima. Sem mídia, sai como texto.</p>
+          <label class="check small" id="fb-carousel-opt"><input type="checkbox" id="fb_caption_each" checked> Repetir a legenda em cada foto do carrossel</label>
+        </div>
+        <div class="net-card" id="tt-opts" hidden>
+          <h3 id="tt-opts-h">TikTok</h3>
+          <p class="help">Um vídeo ou até 32 fotos. "Tipo" não se aplica ao TikTok.</p>
+          <div class="field"><label for="tt_title">Título (até 85 caracteres; vazio = começo da legenda)</label><input id="tt_title" type="text" maxlength="85" placeholder="Ex.: Ofertas de sexta"><span class="help" id="tt-title-count"></span></div>
+          <div class="field"><label for="tt_privacy">Quem pode ver</label><select id="tt_privacy" class="input" style="width:auto"><option value="public">Público</option><option value="private">Só eu (privado)</option></select></div>
+          <div class="inline">
+            <label class="check small"><input type="checkbox" id="tt_comment" checked> Comentários</label>
+            <label class="check small"><input type="checkbox" id="tt_duet" checked> Dueto</label>
+            <label class="check small"><input type="checkbox" id="tt_stitch" checked> Stitch</label>
+            <label class="check small"><input type="checkbox" id="tt_music" checked> Música automática nas fotos</label>
+          </div>
+          <div class="inline">
+            <label class="check small"><input type="checkbox" id="tt_brand"> Conteúdo da minha marca</label>
+            <label class="check small"><input type="checkbox" id="tt_branded"> Conteúdo de marca (parceria paga)</label>
+            <label class="check small"><input type="checkbox" id="tt_ai"> Gerado por IA</label>
+          </div>
+        </div>
       </section>
       <section class="card">
         <div class="split"><h2>Contas</h2><span class="muted small" id="acct-count">0 selecionadas</span></div>
         <div class="inline" id="group-chips"></div>
-        <div class="acct-pick" id="acct-pick"><div class="empty">Carregando contas…</div></div>
+        <div class="acct-pick" id="acct-pick"><div class="sk-list" aria-busy="true"><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:55%"></span><span class="sk sk-line thin" style="width:35%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:65%"></span><span class="sk sk-line thin" style="width:30%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:48%"></span><span class="sk sk-line thin" style="width:40%"></span></span><span class="sk sk-pill"></span></div></div></div>
       </section>
     </div>
     <aside class="stack" style="gap:16px">
@@ -68,17 +92,31 @@
   <dialog class="modal" id="lib"><div class="inner"><div class="modal-head"><h2>Biblioteca</h2><button type="button" class="btn ghost small" id="lib-close">Fechar</button></div><div class="media-grid" id="lib-grid"></div><div class="split"><span class="muted small" id="lib-count"></span><button type="button" class="btn" id="lib-use">Usar selecionadas</button></div></div></dialog>
 </main>
 <script type="module">
-  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountHealth, loadAccounts, loadGroups, toast, qs, defaultScheduleValue, PLACEMENT } from "../assets/app.js";
+  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountHealth, loadAccounts, loadGroups, toast, qs, defaultScheduleValue, PLACEMENT, pageReady, PLATFORMS, platformIcon, platformName, handle } from "../assets/app.js";
   import { kindOf, probe, validateSet, uploadFile } from "../assets/media.js";
-  import { openCropper, fitsPlacement, suggestRatio } from "../assets/cropper.js";
+  import { openCropper, fitsPlacement, suggestRatio, ratiosFor } from "../assets/cropper.js";
+  renderNav("criar", "../");
   const session = await requireAuth("../");
-  renderNav("criar", "../", session.user.email);
   const $ = (s) => document.querySelector(s);
 
   const state = { placement: "timeline", when: "schedule", items: [], selected: new Set(), overrides: {}, editId: null, pfmStatus: null };
   const accounts = (await loadAccounts()).filter((a) => a.status === "connected");
   const groups = await loadGroups();
   const accById = new Map(accounts.map((a) => [a.id, a]));
+
+  // ------------------------------------------------------------- redes das contas escolhidas
+  const selectedPlatforms = () => new Set([...state.selected].map((id) => accById.get(id)?.platform || "instagram"));
+  for (const [id, p] of [["#ig-opts-h", "instagram"], ["#fb-opts-h", "facebook"], ["#tt-opts-h", "tiktok"]]) $(id).innerHTML = `${platformIcon(p, 20)} ${esc(PLATFORMS[p].label)}`;
+  function renderNetOptions() {
+    const p = selectedPlatforms();
+    $("#ig-opts").hidden = !p.has("instagram");
+    $("#fb-opts").hidden = !p.has("facebook");
+    $("#tt-opts").hidden = !p.has("tiktok");
+    $("#reels-opts").hidden = state.placement !== "reels";
+    $("#collab-field").hidden = state.placement === "stories";
+    $("#fb-carousel-opt").hidden = state.items.filter((i) => i.kind === "image").length < 2;
+  }
+  $("#tt_title").addEventListener("input", () => { $("#tt-title-count").textContent = `${$("#tt_title").value.length} / 85`; });
 
   // ------------------------------------------------------------- tipo / quando
   const help = { timeline: "Feed: 1 foto/vídeo ou carrossel de até 10 itens. Um vídeo sozinho vira Reels compartilhado no Feed.", reels: "Reels: exatamente 1 vídeo vertical (9:16), de 3 s a 15 min, até 300 MB.", stories: "Stories: cada foto/vídeo vira um Story separado (vídeo até 60 s)." };
@@ -87,11 +125,10 @@
     state.placement = b.dataset.v;
     $("#placement").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
     $("#placement-help").textContent = help[state.placement];
-    $("#reels-opts").hidden = state.placement !== "reels";
-    $("#collab-field").hidden = state.placement === "stories";
+    renderNetOptions();
     $("#caption").parentElement.hidden = false;
     validateMedia(); renderThumbs(); renderPreview();
-    if (state.items.some((i) => i.kind === "image" && !fitsPlacement(i.width, i.height, state.placement))) toast("Algumas fotos precisam de ajuste para este tipo de post (✂ Ajustar).", "info");
+    if (needsIgFix()) toast("Algumas fotos precisam de ajuste para este tipo de post (✂ Ajustar).", "info");
   });
   $("#when").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -132,14 +169,19 @@
         .then(({ url }) => { if (!item.adjusted) { item.url = url; item.progress = 1; } renderThumbs(); })
         .catch((e) => { item.error = e.message; renderThumbs(); toast(`${file.name}: ${e.message}`, "error"); });
       // Fora da proporção do Instagram? Abre o editor na hora, em vez de deixar o Instagram cortar sozinho.
-      if (item.kind === "image" && !fitsPlacement(item.width, item.height, state.placement)) await adjustItem(item);
+      if (item.kind === "image" && igSelected() && !fitsPlacement(item.width, item.height, state.placement)) await adjustItem(item);
     }
   }
+
+  // A regra dura de proporção é do Instagram (4:5–1.91:1 no Feed). Só vale quando ele está entre as redes.
+  const igSelected = () => selectedPlatforms().has("instagram") || state.selected.size === 0;
+  const needsIgFix = () => igSelected() && state.items.some((i) => i.kind === "image" && !fitsPlacement(i.width, i.height, state.placement));
 
   // Editor de enquadramento: gera um JPEG já no tamanho certo e sobe como nova mídia.
   async function adjustItem(item) {
     const src = item.original?.src || item.previewUrl;
-    const res = await openCropper({ src, placement: state.placement, name: item.name, ratioKey: item.ratioKey || suggestRatio(item.original?.width || item.width, item.original?.height || item.height, state.placement), mode: item.mode || "cover" });
+    const ratios = ratiosFor(selectedPlatforms(), state.placement);
+    const res = await openCropper({ src, placement: state.placement, ratios, name: item.name, ratioKey: item.ratioKey || suggestRatio(item.original?.width || item.width, item.original?.height || item.height, state.placement), mode: item.mode || "cover" });
     if (!res) return false;
     if (res.error) { toast(res.error, "error"); return false; }
     const base = (item.original?.name || item.name || "foto").replace(/\.[a-z0-9]+$/i, "");
@@ -161,7 +203,7 @@
         ${it.kind === "video" ? `<video src="${it.previewUrl}" muted playsinline></video>` : `<img src="${it.previewUrl}" alt="">`}
         <span class="tag">${it.kind === "video" ? (it.duration ? Math.round(it.duration) + "s" : "vídeo") : (it.adjusted ? `ajustada ${it.ratioKey}` : "foto")}</span>
         ${it.error ? `<span class="warnmark">erro</span>` : (!it.url ? `<div class="prog"><i style="width:${Math.round(it.progress * 100)}%"></i></div>` : "")}
-        ${it.kind === "image" && !it.error && !fitsPlacement(it.width, it.height, state.placement) ? `<span class="warnmark">ajustar</span>` : ""}
+        ${it.kind === "image" && !it.error && igSelected() && !fitsPlacement(it.width, it.height, state.placement) ? `<span class="warnmark">ajustar</span>` : ""}
         ${it.kind === "image" ? `<button type="button" class="adj" data-adj="${i}" title="Ajustar enquadramento">✂ Ajustar</button>` : ""}
         <button type="button" class="x" data-rm="${i}" aria-label="Remover">×</button>
       </div>`).join("");
@@ -182,9 +224,10 @@
     const [m] = state.items.splice(dragFrom, 1); state.items.splice(to, 0, m); dragFrom = null; renderThumbs(); renderPreview();
   });
   function validateMedia() {
-    const { errors, warnings } = validateSet(state.items, state.placement);
+    const { errors, warnings } = validateSet(state.items, state.placement, selectedPlatforms());
+    renderNetOptions();
     const imgs = state.items.filter((i) => i.kind === "image" && i.width && i.height);
-    if (state.placement === "timeline" && imgs.length > 1) {
+    if (igSelected() && state.placement === "timeline" && imgs.length > 1) {
       const r0 = imgs[0].width / imgs[0].height;
       if (imgs.some((i) => Math.abs(i.width / i.height - r0) > 0.02)) warnings.push("As fotos do carrossel têm proporções diferentes; o Instagram corta todas para a proporção da primeira. Use ✂ Ajustar com a mesma proporção em todas.");
     }
@@ -231,7 +274,7 @@
     const box = $("#overrides");
     if (!$("#vary").checked) return;
     const ids = [...state.selected];
-    box.innerHTML = ids.length ? ids.map((id) => { const a = accById.get(id); return `<div class="field"><label>@${esc(a?.username || id)}</label><textarea data-ov="${id}" rows="3">${esc(state.overrides[id] ?? (fill ? cap.value : cap.value))}</textarea></div>`; }).join("") : `<p class="help">Selecione as contas para variar a legenda.</p>`;
+    box.innerHTML = ids.length ? ids.map((id) => { const a = accById.get(id); return `<div class="field"><label>${esc(a ? handle(a) : id)} <span class="muted">· ${esc(platformName(a?.platform))}</span></label><textarea data-ov="${id}" rows="3">${esc(state.overrides[id] ?? (fill ? cap.value : cap.value))}</textarea></div>`; }).join("") : `<p class="help">Selecione as contas para variar a legenda.</p>`;
     box.querySelectorAll("textarea").forEach((t) => { if (!(t.dataset.ov in state.overrides)) state.overrides[t.dataset.ov] = t.value; t.addEventListener("input", () => { state.overrides[t.dataset.ov] = t.value; renderPreview(); }); });
   }
 
@@ -249,21 +292,22 @@
   });
   function renderAccounts() {
     $("#acct-pick").innerHTML = accounts.length ? accounts.map((a) => { const [label, kind] = accountHealth(a); return `
-      <label><input type="checkbox" data-acc="${a.id}" ${state.selected.has(a.id) ? "checked" : ""}>${avatar(a, 24)}<span class="name">${a.label ? esc(a.label) + " · " : ""}@${esc(a.username || "")}</span><span class="pill ${kind}">${esc(label)}</span></label>`; }).join("")
-      : `<div class="empty">Nenhuma conta conectada. <a href="../contas/">Conectar Instagram</a>.</div>`;
+      <label><input type="checkbox" data-acc="${a.id}" ${state.selected.has(a.id) ? "checked" : ""}>${avatar(a, 24)}<span class="name">${a.label ? esc(a.label) + " · " : ""}${esc(handle(a))} <span class="muted small">${esc(platformName(a.platform))}</span></span><span class="pill ${kind}">${esc(label)}</span></label>`; }).join("")
+      : `<div class="empty">Nenhuma conta conectada. <a href="../contas/">Conectar uma rede</a>.</div>`;
     $("#acct-count").textContent = `${state.selected.size} de ${accounts.length} selecionada${state.selected.size === 1 ? "" : "s"}`;
     $("#group-chips").querySelectorAll("[data-g]").forEach((c) => {
       const g = c.dataset.g; if (g === "all") c.classList.toggle("on", accounts.length && state.selected.size === accounts.length); else if (g !== "none") { const grp = groups.find((x) => x.id === g); const ids = grp.account_ids.filter((id) => accById.has(id)); c.classList.toggle("on", ids.length > 0 && ids.every((id) => state.selected.has(id))); }
     });
-    renderPreviewSelect(); renderOverrides(true); updateWhenHelp();
+    renderPreviewSelect(); renderOverrides(true); updateWhenHelp(); validateMedia(); renderThumbs();
   }
   $("#acct-pick").addEventListener("change", (e) => { const cb = e.target.closest("[data-acc]"); if (!cb) return; cb.checked ? state.selected.add(cb.dataset.acc) : state.selected.delete(cb.dataset.acc); renderAccounts(); });
   renderGroups(); renderAccounts();
+  pageReady();
 
   // ------------------------------------------------------------- prévia
   function renderPreviewSelect() {
     const sel = $("#preview-acct"); const cur = sel.value;
-    sel.innerHTML = [...state.selected].map((id) => `<option value="${id}">@${esc(accById.get(id)?.username || id)}</option>`).join("") || `<option value="">(nenhuma conta)</option>`;
+    sel.innerHTML = [...state.selected].map((id) => { const a = accById.get(id); return `<option value="${id}">${esc(a ? `${handle(a)} · ${platformName(a.platform)}` : id)}</option>`; }).join("") || `<option value="">(nenhuma conta)</option>`;
     if ([...state.selected].includes(cur)) sel.value = cur;
     renderPreview();
   }
@@ -274,7 +318,7 @@
     ph.innerHTML = first ? (first.kind === "video" ? `<video src="${first.previewUrl}" muted playsinline></video>` : `<img src="${first.previewUrl}" alt="">`) : "sem mídia";
     const id = $("#preview-acct").value; const a = accById.get(id);
     const text = ($("#vary").checked && state.overrides[id]) || cap.value;
-    $("#ph-cap").innerHTML = a ? `<b>${esc(a.username)}</b> ${esc(text)}` : esc(text);
+    $("#ph-cap").innerHTML = a ? `${platformIcon(a.platform || "instagram", 14).replace('class="pf', 'class="pf inline')}<b>${esc(handle(a).replace(/^@/, ""))}</b> ${esc(text)}` : esc(text);
   }
 
   // ------------------------------------------------------------- editar / duplicar
@@ -292,8 +336,14 @@
       const { data: targets } = await supa.from("post_targets").select("account_id").eq("post_id", p.id);
       (targets || []).forEach((t) => { if (accById.has(t.account_id)) state.selected.add(t.account_id); });
       if (p.caption_overrides && Object.keys(p.caption_overrides).length) { state.overrides = { ...p.caption_overrides }; $("#vary").checked = true; $("#overrides").hidden = false; }
-      if (p.options?.share_to_feed === false) $("#share_to_feed").checked = false;
-      if (p.options?.collaborators?.length) $("#collaborators").value = p.options.collaborators.join(", ");
+      const ig = p.options?.instagram || p.options || {};
+      if (ig.share_to_feed === false) $("#share_to_feed").checked = false;
+      if (ig.collaborators?.length) $("#collaborators").value = ig.collaborators.join(", ");
+      const fb = p.options?.facebook || {}; if (fb.set_caption_for_each_image === false) $("#fb_caption_each").checked = false;
+      const tt = p.options?.tiktok || {};
+      if (tt.title) $("#tt_title").value = tt.title;
+      if (tt.privacy_status) $("#tt_privacy").value = tt.privacy_status;
+      for (const [k, id] of [["allow_comment", "tt_comment"], ["allow_duet", "tt_duet"], ["allow_stitch", "tt_stitch"], ["auto_add_music", "tt_music"], ["disclose_your_brand", "tt_brand"], ["disclose_branded_content", "tt_branded"], ["is_ai_generated", "tt_ai"]]) if (typeof tt[k] === "boolean") $("#" + id).checked = tt[k];
       if (p.scheduled_at && new Date(p.scheduled_at) > new Date()) $("#scheduled_at").value = fmt.toLocalInput(p.scheduled_at);
       renderAccounts();
     }
@@ -306,8 +356,9 @@
     const errors = validateMedia();
     if (state.items.some((i) => !i.url && !i.error)) errors.push("Aguarde o upload terminar.");
     if (state.items.some((i) => i.error)) errors.push("Remova as mídias com erro de upload.");
-    if (state.placement === "timeline") for (const i of state.items) if (i.kind === "image" && !fitsPlacement(i.width, i.height, "timeline")) errors.push(`${i.name}: fora da proporção do Feed (4:5 a 1.91:1). Clique em ✂ Ajustar na foto.`);
-    if (!cap.value.trim() && state.placement !== "stories") errors.push("Escreva uma legenda.");
+    const nets = selectedPlatforms();
+    if (nets.has("instagram") && state.placement === "timeline") for (const i of state.items) if (i.kind === "image" && !fitsPlacement(i.width, i.height, "timeline")) errors.push(`${i.name}: fora da proporção do Feed do Instagram (4:5 a 1.91:1). Clique em ✂ Ajustar na foto.`);
+    if (!cap.value.trim() && state.placement !== "stories" && !(nets.size === 1 && nets.has("facebook") && state.items.length)) errors.push("Escreva uma legenda.");
     if (!state.selected.size) errors.push("Escolha pelo menos uma conta.");
     const scheduled_at = state.when === "now" ? null : fmt.fromLocalInput($("#scheduled_at").value);
     if (state.when !== "now" && !scheduled_at) errors.push("Escolha data e hora.");
@@ -326,7 +377,11 @@
       account_ids: [...state.selected],
       scheduled_at,
       caption_overrides: overrides,
-      options: { ...(state.placement === "reels" ? { share_to_feed: $("#share_to_feed").checked } : {}), ...(collaborators.length && state.placement !== "stories" ? { collaborators } : {}) },
+      platform_options: {
+        instagram: { ...(state.placement === "reels" ? { share_to_feed: $("#share_to_feed").checked } : {}), ...(collaborators.length && state.placement !== "stories" ? { collaborators } : {}) },
+        facebook: { set_caption_for_each_image: $("#fb_caption_each").checked },
+        tiktok: { title: $("#tt_title").value.trim() || undefined, privacy_status: $("#tt_privacy").value, allow_comment: $("#tt_comment").checked, allow_duet: $("#tt_duet").checked, allow_stitch: $("#tt_stitch").checked, auto_add_music: $("#tt_music").checked, disclose_your_brand: $("#tt_brand").checked, disclose_branded_content: $("#tt_branded").checked, is_ai_generated: $("#tt_ai").checked },
+      },
     };
     const btn = $("#submit"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Enviando…`;
     try {

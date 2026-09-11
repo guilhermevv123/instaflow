@@ -260,3 +260,49 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 .thumb .adj { position: absolute; left: 6px; bottom: 6px; padding: 3px 8px; border: 0; border-radius: 6px; background: rgba(0,0,0,.65); color: #fff; font: 700 .68rem var(--body); cursor: pointer; }
 .thumb .adj:hover { background: var(--accent); color: var(--accent-ink); }
 @media (max-width: 760px) { .crop-body { grid-template-columns: 1fr; } .crop-stage { height: 52vh; min-height: 260px; } }
+
+/* carregamento: barra no topo + esqueletos */
+.pagebar { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 60; pointer-events: none; background: var(--brand-grad); background-size: 200% 100%; transform-origin: left; animation: pagebar 1.4s ease-in-out infinite; }
+.pagebar.done { animation: none; transform: scaleX(1); opacity: 0; transition: opacity .35s; }
+@keyframes pagebar { 0% { transform: scaleX(.05); background-position: 0% 0; } 60% { transform: scaleX(.75); } 100% { transform: scaleX(.95); background-position: 100% 0; } }
+.sk { display: inline-block; background: linear-gradient(90deg, var(--surface-2) 25%, color-mix(in srgb, var(--surface-2) 55%, var(--surface)) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: sk 1.3s linear infinite; border-radius: 6px; }
+@keyframes sk { to { background-position: -200% 0; } }
+.sk-list { display: grid; }
+.sk-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.sk-row:last-child { border-bottom: 0; }
+.sk-av { width: 32px; height: 32px; border-radius: 50%; }
+.sk-lines { display: grid; gap: 7px; }
+.sk-line { height: 12px; width: 60%; }
+.sk-line.thin { height: 9px; }
+.sk-pill { width: 72px; height: 20px; border-radius: 999px; }
+.sk-thumb { position: relative; }
+@media (prefers-reduced-motion: reduce) { .sk, .pagebar { animation: none; } }
+
+/* diálogos do painel (substituem confirm/prompt do navegador) */
+dialog.modal[open] { animation: dlg-in .18s cubic-bezier(.22, 1, .36, 1); }
+dialog.modal::backdrop { background: rgba(8, 9, 12, .55); backdrop-filter: blur(3px); }
+@keyframes dlg-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+.ifd { max-width: 440px; }
+.ifd-inner { gap: 14px; }
+.ifd-text { color: var(--ink-2); line-height: 1.5; }
+.ifd-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.btn.danger-solid { background: var(--bad); color: #fff; border-color: transparent; }
+@media (prefers-reduced-motion: reduce) { dialog.modal[open] { animation: none; } }
+
+/* selo da rede no avatar + menu Conectar */
+.av-wrap { position: relative; display: inline-grid; place-items: center; flex: none; vertical-align: middle; }
+.av-wrap .av { width: 100%; height: 100%; }
+.pf { position: absolute; right: -4px; bottom: -4px; display: inline-grid; place-items: center; border-radius: 50%; background: var(--pf); color: #fff; box-shadow: 0 0 0 2px var(--surface); }
+.pf svg { width: 68%; height: 68%; }
+.pf.pf-tiktok { background: #111; color: #fff; }
+.pf.inline { position: static; box-shadow: none; vertical-align: -2px; margin-right: 4px; }
+.menu-wrap { position: relative; }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 240px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: 2px; }
+.menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+.menu button:hover { background: var(--surface-2); }
+.menu button .pf { position: static; box-shadow: none; width: 26px; height: 26px; }
+.menu button small { display: block; color: var(--muted); font-size: .76rem; }
+.net-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.net-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 8px; background: var(--bg); }
+.net-card h3 { display: flex; align-items: center; gap: 8px; font-size: .92rem; }
+.net-card h3 .pf { position: static; box-shadow: none; width: 20px; height: 20px; }

@@ -73,19 +73,42 @@ export function validateItem(item, placement) {
   return { errors, warnings };
 }
 
-export function validateSet(items, placement) {
+// `platforms`: redes das contas escolhidas (Set). Sem nenhuma, vale a regra do Instagram.
+export function validateSet(items, placement, platforms = new Set()) {
   const errors = [], warnings = [];
-  if (!items.length) errors.push("Adicione pelo menos uma foto ou vídeo.");
-  if (items.length > 10) errors.push("Máximo de 10 itens por publicação.");
-  if (placement === "reels" && (items.length !== 1 || items[0]?.kind !== "video")) errors.push("Reels: exatamente um vídeo.");
-  if (placement === "timeline" && items.length > 1) {
-    const longVideo = items.find((i) => i.kind === "video" && i.duration > LIMITS.carouselVideoMaxS);
-    if (longVideo) warnings.push("Vídeos dentro de carrossel ficam limitados a 60 s pelo Instagram.");
+  const p = platforms.size ? platforms : new Set(["instagram"]);
+  const videos = items.filter((i) => i.kind === "video"), images = items.filter((i) => i.kind === "image");
+  if (!items.length && !(p.size === 1 && p.has("facebook"))) errors.push("Adicione pelo menos uma foto ou vídeo.");
+  if (items.length > 32) errors.push("Máximo de 32 itens por publicação.");
+  if (p.has("instagram")) {
+    if (items.length > 10) errors.push("Instagram: máximo de 10 itens no carrossel.");
+    if (placement === "reels" && (items.length !== 1 || items[0]?.kind !== "video")) errors.push("Instagram: Reels precisa de exatamente um vídeo.");
+    if (placement === "timeline" && items.length > 1) {
+      const longVideo = items.find((i) => i.kind === "video" && i.duration > LIMITS.carouselVideoMaxS);
+      if (longVideo) warnings.push("Vídeos dentro de carrossel ficam limitados a 60 s pelo Instagram.");
+    }
+    if (placement === "timeline" && items.length === 1 && items[0]?.kind === "video") warnings.push("Instagram: um vídeo no Feed é publicado como Reels e compartilhado no Feed.");
+    if (placement === "stories" && items.length > 1) warnings.push(`Instagram: ${items.length} itens → serão ${items.length} Stories separados, em sequência.`);
   }
-  if (placement === "timeline" && items.length === 1 && items[0]?.kind === "video") warnings.push("Um vídeo no Feed é publicado como Reels e compartilhado no Feed.");
-  if (placement === "stories" && items.length > 1) warnings.push(`${items.length} itens → serão ${items.length} Stories separados, em sequência.`);
-  for (const it of items) { const r = validateItem(it, placement); errors.push(...r.errors); warnings.push(...r.warnings); }
-  return { errors, warnings: [...new Set(warnings)] };
+  if (p.has("facebook")) {
+    if (items.length > 1 && videos.length) errors.push("Facebook: o carrossel só aceita fotos (o vídeo ficaria de fora).");
+    if (placement === "reels" && (items.length !== 1 || items[0]?.kind !== "video")) errors.push("Facebook: Reels precisa de exatamente um vídeo.");
+    if (placement === "stories" && items.length > 1) errors.push("Facebook: Stories aceita uma foto ou um vídeo por publicação.");
+  }
+  if (p.has("tiktok")) {
+    if (videos.length > 1 || (videos.length === 1 && images.length)) errors.push("TikTok: ou um vídeo sozinho, ou só fotos (até 32).");
+    const big = images.find((i) => i.size > 20 * MB);
+    if (big) errors.push(`TikTok: ${big.name} passa de 20 MB (limite para fotos).`);
+    if (videos.length === 1 && videos[0].type && !["video/mp4", "video/quicktime", "video/webm"].includes(videos[0].type)) errors.push("TikTok: vídeo precisa ser MP4, MOV ou WebM.");
+    if (images.length && !p.has("instagram")) warnings.push("TikTok ajusta as fotos para 9:16, 3:4, 1:1 ou 16:9. Use ✂ Ajustar para escolher.");
+  }
+  for (const it of items) {
+    // regras de arquivo do Instagram só quando ele está entre as redes escolhidas
+    const r = p.has("instagram") ? validateItem(it, placement) : validateItem(it, placement === "reels" ? "timeline" : placement);
+    if (!p.has("instagram")) { r.warnings = r.warnings.filter((w) => !/4:5–1\.91:1|Reels precisa/.test(w)); r.errors = r.errors.filter((e) => !/Reels precisa/.test(e)); }
+    errors.push(...r.errors); warnings.push(...r.warnings);
+  }
+  return { errors: [...new Set(errors)], warnings: [...new Set(warnings)] };
 }
 
 // Sobe o arquivo para o Post for Me (URL assinada) e registra na biblioteca.

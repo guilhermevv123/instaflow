@@ -23,6 +23,10 @@ import { friendlyError } from "../_shared/friendly.ts";
 import { listData, pfm, PfmError, pfmListAll, type PfmAccount, type PfmPost, type PfmResult, type PfmWebhook } from "../_shared/pfm.ts";
 import { background, type Caller, corsHeaders, HttpError, json, readJson, requireMember, serviceClient, SUPABASE_URL, teamOf, teamTag } from "../_shared/util.ts";
 
+// Redes que o painel sabe publicar (ids do Post for Me).
+export const SUPPORTED = ["instagram", "facebook", "tiktok"] as const;
+type Platform = typeof SUPPORTED[number];
+
 const WEBHOOK_EVENTS = [
   "social.post.result.created",
   "social.post.updated",
@@ -39,15 +43,53 @@ interface MediaInput {
   skip_processing?: boolean | null; // já ajustada no painel: o Post for Me não mexe
 }
 
+interface PlatformOptions {
+  instagram?: { share_to_feed?: boolean; collaborators?: string[] };
+  facebook?: { set_caption_for_each_image?: boolean };
+  tiktok?: {
+    title?: string;
+    privacy_status?: "public" | "private";
+    allow_comment?: boolean;
+    allow_duet?: boolean;
+    allow_stitch?: boolean;
+    disclose_your_brand?: boolean;
+    disclose_branded_content?: boolean;
+    is_ai_generated?: boolean;
+    auto_add_music?: boolean;
+  };
+}
+
 interface PostInput {
   title?: string | null;
   caption: string;
-  placement?: "timeline" | "reels" | "stories";
+  placement?: "timeline" | "reels" | "stories"; // vale para Instagram e Facebook
   media: MediaInput[];
   account_ids: string[];
   scheduled_at?: string | null;
   caption_overrides?: Record<string, string>;
-  options?: { share_to_feed?: boolean; collaborators?: string[] };
+  options?: { share_to_feed?: boolean; collaborators?: string[] }; // legado (Instagram)
+  platform_options?: PlatformOptions;
+}
+
+// Aceita o formato antigo (options = Instagram) e o novo (por rede).
+function normalizeOptions(input: PostInput): PlatformOptions {
+  const po = input.platform_options ?? {};
+  const ig = po.instagram ?? input.options ?? {};
+  return {
+    instagram: { share_to_feed: ig.share_to_feed, collaborators: ig.collaborators?.slice(0, 3) },
+    facebook: { set_caption_for_each_image: po.facebook?.set_caption_for_each_image ?? true },
+    tiktok: {
+      title: po.tiktok?.title?.trim().slice(0, 85) || undefined,
+      privacy_status: po.tiktok?.privacy_status === "private" ? "private" : "public",
+      allow_comment: po.tiktok?.allow_comment ?? true,
+      allow_duet: po.tiktok?.allow_duet ?? true,
+      allow_stitch: po.tiktok?.allow_stitch ?? true,
+      disclose_your_brand: po.tiktok?.disclose_your_brand ?? false,
+      disclose_branded_content: po.tiktok?.disclose_branded_content ?? false,
+      is_ai_generated: po.tiktok?.is_ai_generated ?? false,
+      auto_add_music: po.tiktok?.auto_add_music ?? true,
+    },
+  };
 }
 
 Deno.serve(async (req) => {
@@ -63,7 +105,7 @@ Deno.serve(async (req) => {
     if (req.method === "GET" && path === "/health") return json(req, await health(db, caller));
     if (req.method === "GET" && path === "/team") return json(req, await teamInfo(db, caller));
     if (req.method === "GET" && path === "/accounts/sync") return json(req, await syncAccounts(db, caller));
-    if (req.method === "POST" && path === "/accounts/connect") return json(req, await connectUrl(db, caller, await readJson<{ reconnect?: boolean }>(req).catch(() => ({}))));
+    if (req.method === "POST" && path === "/accounts/connect") return json(req, await connectUrl(db, caller, await readJson<{ platform?: string; reconnect?: boolean }>(req).catch(() => ({}))));
     if (req.method === "POST" && seg[0] === "accounts" && seg[2] === "disconnect") return json(req, await disconnectAccount(db, caller, seg[1]));
     if (req.method === "DELETE" && seg[0] === "accounts" && seg.length === 2) return json(req, await removeAccount(db, caller, seg[1]));
     if (req.method === "POST" && path === "/media/upload-url") return json(req, await pfm("/media/create-upload-url", { method: "POST" }));
@@ -138,7 +180,7 @@ function accountRow(a: PfmAccount, teamId: string) {
 // Todas as contas do Post for Me são do mesmo projeto; só entram as do time:
 // as que já estão nele ou as marcadas com o external_id do time.
 async function syncAccounts(db: Db, caller: Caller) {
-  const all = await pfmListAll<PfmAccount>("/social-accounts", { platform: "instagram" });
+  const all = (await pfmListAll<PfmAccount>("/social-accounts")).filter((a) => (SUPPORTED as readonly string[]).includes(a.platform));
   const { data: mine } = await db.from("accounts").select("id").eq("team_id", caller.teamId);
   const mineIds = new Set((mine ?? []).map((a) => a.id));
   const ours = all.filter((a) => mineIds.has(a.id) || teamOf(a.external_id) === caller.teamId);
@@ -156,23 +198,33 @@ async function syncAccounts(db: Db, caller: Caller) {
   return { accounts: data ?? [], synced: rows.length };
 }
 
-async function connectUrl(db: Db, caller: Caller, body: { reconnect?: boolean }) {
+async function connectUrl(db: Db, caller: Caller, body: { platform?: string; reconnect?: boolean }) {
+  const platform = (body.platform ?? "instagram") as Platform;
+  if (!(SUPPORTED as readonly string[]).includes(platform)) throw new HttpError(400, "Rede não suportada. Use instagram, facebook ou tiktok.");
   if (!body.reconnect) {
     const { count } = await db.from("accounts").select("id", { count: "exact", head: true }).eq("team_id", caller.teamId).eq("archived", false);
     if ((count ?? 0) >= caller.maxAccounts) {
       throw new HttpError(400, `Este time chegou ao limite de ${caller.maxAccounts} contas. Remova uma conta ou peça para aumentar o limite.`);
     }
   }
+  // Instagram: login do próprio Instagram (sem Página do Facebook).
+  // Facebook: cada Página escolhida na autorização vira uma conta.
+  // TikTok: perfil pessoal/criador (Login Kit).
+  const platformData = platform === "instagram"
+    ? { instagram: { connection_type: "instagram" } }
+    : platform === "facebook"
+    ? { facebook: {} }
+    : { tiktok: {} };
   const res = await pfm<{ url: string; platform: string }>("/social-accounts/auth-url", {
     method: "POST",
     body: {
-      platform: "instagram",
-      platform_data: { instagram: { connection_type: "instagram" } },
+      platform,
+      platform_data: platformData,
       external_id: teamTag(caller.teamId),
       permissions: ["posts"],
     },
   });
-  return { url: res.url };
+  return { url: res.url, platform };
 }
 
 async function accountOf(db: Db, caller: Caller, id: string) {
@@ -208,27 +260,46 @@ async function removeAccount(db: Db, caller: Caller, id: string) {
 // ---------------------------------------------------------------------------
 // Publicações
 // ---------------------------------------------------------------------------
-function validatePost(input: PostInput) {
+// Regras por rede (as do Post for Me + as das próprias redes). `platforms` são
+// as redes das contas escolhidas; uma publicação pode ir para várias de uma vez.
+function validatePost(input: PostInput, platforms: Set<string>) {
   const errors: string[] = [];
   const placement = input.placement ?? "timeline";
   if (!["timeline", "reels", "stories"].includes(placement)) errors.push("Tipo de post inválido.");
-  if (!input.caption?.trim() && placement !== "stories") errors.push("Escreva uma legenda.");
-  if (!Array.isArray(input.media) || input.media.length === 0) errors.push("Adicione pelo menos uma foto ou vídeo.");
-  if (Array.isArray(input.media)) {
-    if (input.media.length > 10) errors.push("O carrossel aceita no máximo 10 itens.");
-    for (const m of input.media) {
-      if (!m?.url || !/^https:\/\//.test(m.url)) errors.push("Mídia com link inválido.");
-      if (!["image", "video"].includes(m?.kind)) errors.push("Tipo de mídia inválido.");
-    }
-    if (placement === "reels" && (input.media.length !== 1 || input.media[0]?.kind !== "video")) {
-      errors.push("Reels precisa de exatamente um vídeo.");
-    }
+  const media = Array.isArray(input.media) ? input.media : [];
+  for (const m of media) {
+    if (!m?.url || !/^https:\/\//.test(m.url)) errors.push("Mídia com link inválido.");
+    if (!["image", "video"].includes(m?.kind)) errors.push("Tipo de mídia inválido.");
   }
-  if (!Array.isArray(input.account_ids) || input.account_ids.length === 0) errors.push("Escolha pelo menos uma conta.");
+  const videos = media.filter((m) => m.kind === "video").length;
+  const images = media.length - videos;
+  const caption = input.caption?.trim() ?? "";
+  if (media.length > 32) errors.push("Máximo de 32 itens por publicação.");
+  if (caption.length > 2200) errors.push("A legenda tem no máximo 2.200 caracteres.");
+  if (!caption && placement !== "stories" && !(platforms.size === 1 && platforms.has("facebook") && media.length > 0)) errors.push("Escreva uma legenda.");
+
+  if (platforms.has("instagram")) {
+    if (media.length === 0) errors.push("Instagram: adicione pelo menos uma foto ou vídeo.");
+    if (media.length > 10) errors.push("Instagram: o carrossel aceita no máximo 10 itens.");
+    if (placement === "reels" && (media.length !== 1 || videos !== 1)) errors.push("Instagram: Reels precisa de exatamente um vídeo.");
+  }
+  if (platforms.has("facebook")) {
+    if (media.length === 0 && !caption) errors.push("Facebook: escreva um texto ou adicione mídia.");
+    if (media.length > 1 && videos > 0) errors.push("Facebook: o carrossel só aceita fotos (vídeos ficariam de fora).");
+    if (placement === "reels" && (media.length !== 1 || videos !== 1)) errors.push("Facebook: Reels precisa de exatamente um vídeo.");
+    if (placement === "stories" && media.length !== 1) errors.push("Facebook: Stories aceita uma foto ou um vídeo por publicação.");
+  }
+  if (platforms.has("tiktok")) {
+    if (media.length === 0) errors.push("TikTok: adicione um vídeo ou de 1 a 32 fotos.");
+    if (videos > 1 || (videos === 1 && images > 0)) errors.push("TikTok: ou um vídeo sozinho, ou só fotos (até 32).");
+    const tt = input.platform_options?.tiktok;
+    if (tt?.privacy_status && !["public", "private"].includes(tt.privacy_status)) errors.push("TikTok: privacidade inválida.");
+    if (tt?.title && tt.title.trim().length > 85) errors.push("TikTok: o título tem no máximo 85 caracteres.");
+  }
   if (input.scheduled_at) {
-    const t = Date.parse(input.scheduled_at);
-    if (Number.isNaN(t)) errors.push("Data e hora inválidas.");
-    else if (t < Date.now() - 60_000) errors.push("A data e hora precisam estar no futuro.");
+    const ts = Date.parse(input.scheduled_at);
+    if (Number.isNaN(ts)) errors.push("Data e hora inválidas.");
+    else if (ts < Date.now() - 60_000) errors.push("A data e hora precisam estar no futuro.");
   }
   if (errors.length) throw new HttpError(400, errors.join(" "));
   return placement as "timeline" | "reels" | "stories";
@@ -236,7 +307,8 @@ function validatePost(input: PostInput) {
 
 async function loadAccounts(db: Db, caller: Caller, ids: string[]) {
   const unique = [...new Set(ids)];
-  const { data, error } = await db.from("accounts").select("id, username, status, archived").eq("team_id", caller.teamId).in("id", unique);
+  if (!unique.length) throw new HttpError(400, "Escolha pelo menos uma conta.");
+  const { data, error } = await db.from("accounts").select("id, username, status, archived, platform").eq("team_id", caller.teamId).in("id", unique);
   if (error) throw new HttpError(500, error.message);
   const found = new Map((data ?? []).map((a) => [a.id, a]));
   const missing = unique.filter((id) => !found.has(id));
@@ -253,13 +325,35 @@ async function checkMonthLimit(db: Db, caller: Caller, adding: number) {
   }
 }
 
-function buildPfmBody(input: PostInput, placement: string, externalId: string) {
+function buildPfmBody(input: PostInput, placement: string, externalId: string, platforms: Set<string>) {
   const caption = input.caption?.trim() || " ";
   const overrides = input.caption_overrides ?? {};
-  const instagram: Record<string, unknown> = { placement };
-  if (placement !== "stories") {
-    if (typeof input.options?.share_to_feed === "boolean") instagram.share_to_feed = input.options.share_to_feed;
-    if (input.options?.collaborators?.length) instagram.collaborators = input.options.collaborators.slice(0, 3);
+  const opts = normalizeOptions(input);
+  const platform_configurations: Record<string, unknown> = {};
+  if (platforms.has("instagram")) {
+    const instagram: Record<string, unknown> = { placement };
+    if (placement !== "stories") {
+      if (typeof opts.instagram?.share_to_feed === "boolean") instagram.share_to_feed = opts.instagram.share_to_feed;
+      if (opts.instagram?.collaborators?.length) instagram.collaborators = opts.instagram.collaborators;
+    }
+    platform_configurations.instagram = instagram;
+  }
+  if (platforms.has("facebook")) {
+    platform_configurations.facebook = { placement, set_caption_for_each_image: opts.facebook?.set_caption_for_each_image ?? true };
+  }
+  if (platforms.has("tiktok")) {
+    const tt = opts.tiktok ?? {};
+    platform_configurations.tiktok = {
+      title: (tt.title || caption).slice(0, 85),
+      privacy_status: tt.privacy_status ?? "public",
+      allow_comment: tt.allow_comment ?? true,
+      allow_duet: tt.allow_duet ?? true,
+      allow_stitch: tt.allow_stitch ?? true,
+      disclose_your_brand: tt.disclose_your_brand ?? false,
+      disclose_branded_content: tt.disclose_branded_content ?? false,
+      is_ai_generated: tt.is_ai_generated ?? false,
+      auto_add_music: tt.auto_add_music ?? true,
+    };
   }
   const accountConfigs = input.account_ids
     .filter((id) => overrides[id]?.trim() && overrides[id].trim() !== caption)
@@ -273,7 +367,7 @@ function buildPfmBody(input: PostInput, placement: string, externalId: string) {
       thumbnail_url: m.thumbnail_url || undefined,
       skip_processing: m.skip_processing ? true : undefined,
     })),
-    platform_configurations: { instagram },
+    platform_configurations,
     account_configurations: accountConfigs.length ? accountConfigs : undefined,
     external_id: externalId,
   };
@@ -284,9 +378,10 @@ function cleanMedia(media: MediaInput[]): MediaInput[] {
 }
 
 async function createPost(db: Db, caller: Caller, input: PostInput) {
-  const placement = validatePost(input);
-  input.account_ids = [...new Set(input.account_ids)];
-  await loadAccounts(db, caller, input.account_ids);
+  input.account_ids = [...new Set(Array.isArray(input.account_ids) ? input.account_ids : [])];
+  const accs = await loadAccounts(db, caller, input.account_ids);
+  const platforms = new Set(accs.map((a) => a.platform as string));
+  const placement = validatePost(input, platforms);
   await checkMonthLimit(db, caller, input.account_ids.length);
   const scheduled = input.scheduled_at ? new Date(input.scheduled_at).toISOString() : null;
 
@@ -296,7 +391,7 @@ async function createPost(db: Db, caller: Caller, input: PostInput) {
     caption: input.caption?.trim() || "",
     placement,
     media: cleanMedia(input.media),
-    options: input.options ?? {},
+    options: normalizeOptions(input),
     caption_overrides: input.caption_overrides ?? {},
     scheduled_at: scheduled,
     status: scheduled ? "scheduled" : "processing",
@@ -306,7 +401,7 @@ async function createPost(db: Db, caller: Caller, input: PostInput) {
 
   let pfmPost: PfmPost;
   try {
-    pfmPost = await pfm<PfmPost>("/social-posts", { method: "POST", body: buildPfmBody({ ...input, scheduled_at: scheduled }, placement, post.id) });
+    pfmPost = await pfm<PfmPost>("/social-posts", { method: "POST", body: buildPfmBody({ ...input, scheduled_at: scheduled }, placement, post.id, platforms) });
   } catch (e) {
     await db.from("posts").delete().eq("id", post.id);
     throw e;
@@ -327,9 +422,10 @@ async function getPost(db: Db, caller: Caller, id: string) {
 async function updatePost(db: Db, caller: Caller, id: string, input: PostInput) {
   const post = await getPost(db, caller, id);
   if (!["scheduled", "draft"].includes(post.status)) throw new HttpError(400, "Só dá para editar uma publicação que ainda está agendada.");
-  const placement = validatePost(input);
-  input.account_ids = [...new Set(input.account_ids)];
-  await loadAccounts(db, caller, input.account_ids);
+  input.account_ids = [...new Set(Array.isArray(input.account_ids) ? input.account_ids : [])];
+  const accs = await loadAccounts(db, caller, input.account_ids);
+  const platforms = new Set(accs.map((a) => a.platform as string));
+  const placement = validatePost(input, platforms);
   const scheduled = input.scheduled_at ? new Date(input.scheduled_at).toISOString() : null;
   if (!scheduled) throw new HttpError(400, "Para publicar agora, cancele esta e crie uma nova publicação.");
   const { count: before } = await db.from("post_targets").select("post_id", { count: "exact", head: true }).eq("post_id", id);
@@ -337,14 +433,14 @@ async function updatePost(db: Db, caller: Caller, id: string, input: PostInput) 
 
   const pfmPost = await pfm<PfmPost>(`/social-posts/${encodeURIComponent(post.pfm_post_id)}`, {
     method: "PUT",
-    body: buildPfmBody({ ...input, scheduled_at: scheduled }, placement, post.id),
+    body: buildPfmBody({ ...input, scheduled_at: scheduled }, placement, post.id, platforms),
   });
   await db.from("posts").update({
     title: input.title?.trim() || null,
     caption: input.caption?.trim() || "",
     placement,
     media: cleanMedia(input.media),
-    options: input.options ?? {},
+    options: normalizeOptions(input),
     caption_overrides: input.caption_overrides ?? {},
     scheduled_at: scheduled,
     status: pfmPost.status,
@@ -416,7 +512,7 @@ async function retryPost(db: Db, caller: Caller, id: string) {
     account_ids: ids,
     scheduled_at: null,
     caption_overrides: post.caption_overrides,
-    options: post.options,
+    platform_options: post.options,
   });
 }
 

@@ -101,7 +101,7 @@ async function onPost(db: Db, p: PfmPost) {
 }
 
 async function onAccount(db: Db, a: PfmAccount) {
-  if (!a?.id || a.platform !== "instagram") return;
+  if (!a?.id || !["instagram", "facebook", "tiktok"].includes(a.platform)) return;
   // O time vem do external_id gerado no "Conectar Instagram"; uma conta que já
   // tem time continua nele (quem conectou primeiro fica com ela).
   const { data: existing } = await db.from("accounts").select("team_id").eq("id", a.id).maybeSingle();

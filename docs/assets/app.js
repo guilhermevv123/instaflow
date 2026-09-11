@@ -15,13 +15,13 @@ export const supa = configured
 export async function requireAuth(rootRel = "../") {
   if (!configured) {
     showSetupNotice();
-    throw new Error("não configurado");
+    return new Promise(() => {}); // para o módulo aqui, sem erro no console
   }
   const { data } = await supa.auth.getSession();
   if (!data.session) {
     const next = encodeURIComponent(location.pathname + location.search);
     location.replace(`${rootRel}entrar/?next=${next}`);
-    throw new Error("sem sessão");
+    return new Promise(() => {}); // a página está saindo; nada mais roda
   }
   return data.session;
 }

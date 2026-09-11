@@ -65,9 +65,9 @@ function ensureDialog() {
           </div>
           <div class="stack small" id="crop-info"></div>
           <div class="inline"><button type="button" class="btn ghost small" id="crop-center">Centralizar</button></div>
-          <div class="split" style="margin-top:auto"><button type="button" class="btn ghost" id="crop-cancel">Cancelar</button><button type="button" class="btn" id="crop-apply">Aplicar</button></div>
         </div>
       </div>
+      <div class="crop-foot"><button type="button" class="btn ghost" id="crop-cancel">Cancelar</button><button type="button" class="btn" id="crop-apply">Aplicar</button></div>
     </div>`;
   document.body.appendChild(dlg);
   return dlg;
@@ -111,6 +111,7 @@ export function openCropper({ src, placement = "timeline", ratioKey, mode = "cov
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
     $("#crop-help").textContent = `${name} · original ${iw}×${ih} px`;
+    $("#crop-hint").textContent = window.matchMedia("(pointer: coarse)").matches ? "Arraste para mover · pince para dar zoom" : "Arraste para posicionar";
     $("#crop-ratios").innerHTML = ratios.map(([k, , label]) => `<button type="button" data-v="${k}" class="${k === st.ratioKey ? "on" : ""}">${label}</button>`).join("");
 
     function ratio() { return (ratios.find(([k]) => k === st.ratioKey) || ratios[0])[1]; }
@@ -183,11 +184,29 @@ export function openCropper({ src, placement = "timeline", ratioKey, mode = "cov
     $("#crop-center").onclick = () => { st.ox = st.oy = 0; render(); };
     // roda do mouse = zoom
     canvas.onwheel = (e) => { if (st.mode !== "cover") return; e.preventDefault(); st.zoom = Math.max(1, Math.min(4, st.zoom * (e.deltaY < 0 ? 1.06 : 0.94))); $("#crop-zoom").value = st.zoom; render(); };
-    // arrastar
-    let drag = null;
-    canvas.onpointerdown = (e) => { if (st.mode !== "cover") return; drag = { x: e.clientX, y: e.clientY, ox: st.ox, oy: st.oy }; canvas.setPointerCapture(e.pointerId); };
-    canvas.onpointermove = (e) => { if (!drag) return; st.ox = drag.ox + (e.clientX - drag.x); st.oy = drag.oy + (e.clientY - drag.y); render(); };
-    canvas.onpointerup = canvas.onpointercancel = () => { drag = null; };
+    // arrastar com um dedo (ou mouse); pinçar com dois dedos = zoom no celular
+    let drag = null, pinch = null;
+    const pts = new Map();
+    const dist = () => { const [a, b] = [...pts.values()]; return Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)); };
+    canvas.onpointerdown = (e) => {
+      if (st.mode !== "cover") return;
+      canvas.setPointerCapture(e.pointerId);
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2) { drag = null; pinch = { d: dist(), zoom: st.zoom }; }
+      else if (pts.size === 1) drag = { x: e.clientX, y: e.clientY, ox: st.ox, oy: st.oy };
+    };
+    canvas.onpointermove = (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && pts.size >= 2) { st.zoom = Math.max(1, Math.min(4, pinch.zoom * dist() / pinch.d)); $("#crop-zoom").value = st.zoom; render(); return; }
+      if (drag) { st.ox = drag.ox + (e.clientX - drag.x); st.oy = drag.oy + (e.clientY - drag.y); render(); }
+    };
+    canvas.onpointerup = canvas.onpointercancel = (e) => {
+      pts.delete(e.pointerId);
+      if (pts.size < 2) pinch = null;
+      const rest = [...pts.values()][0];
+      drag = rest ? { x: rest.x, y: rest.y, ox: st.ox, oy: st.oy } : null;
+    };
 
     let done = false;
     const finish = (val) => { if (done) return; done = true; dlg.close(); window.removeEventListener("resize", render); resolve(val); };

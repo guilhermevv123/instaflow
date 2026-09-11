@@ -20,6 +20,7 @@
     <div><div class="eyebrow">Instagram · Facebook · TikTok</div><h1 class="h1">Contas conectadas</h1></div>
     <div class="actions"><button class="btn ghost" id="sync">Sincronizar</button>
       <div class="menu-wrap"><button class="btn" id="connect" aria-haspopup="menu" aria-expanded="false">+ Conectar</button>
+        <div class="menu-scrim" id="connect-scrim" hidden></div>
         <div class="menu" id="connect-menu" role="menu" hidden>
           <button type="button" role="menuitem" data-p="instagram"></button>
           <button type="button" role="menuitem" data-p="facebook"></button>
@@ -29,7 +30,7 @@
     </div>
   </div>
   <div id="notice"></div>
-  <div class="grid" style="grid-template-columns: minmax(0, 1.6fr) minmax(280px, .8fr)">
+  <div class="grid main-side">
     <section class="card">
       <div class="split"><h2 id="count">Contas</h2><span class="muted small">A barra mostra as publicações das últimas 24 h (o Instagram limita a 100)</span></div>
       <div class="list" id="list"><div class="sk-list" aria-busy="true"><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:55%"></span><span class="sk sk-line thin" style="width:35%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:65%"></span><span class="sk sk-line thin" style="width:30%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:48%"></span><span class="sk sk-line thin" style="width:40%"></span></span><span class="sk sk-pill"></span></div></div></div>
@@ -98,7 +99,8 @@
   const menu = $("#connect-menu");
   for (const b of menu.querySelectorAll("[data-p]")) { const pf = PLATFORMS[b.dataset.p]; b.innerHTML = `${platformIcon(b.dataset.p, 26)}<span>${esc(pf.label)}<small>${esc(pf.hint)}</small></span>`; }
   for (const [id, p] of [["#h-ig", "instagram"], ["#h-fb", "facebook"], ["#h-tt", "tiktok"]]) $(id).innerHTML = `${platformIcon(p, 20)} ${esc(PLATFORMS[p].label)}`;
-  const openMenu = (on) => { menu.hidden = !on; $("#connect").setAttribute("aria-expanded", String(on)); };
+  const openMenu = (on) => { menu.hidden = !on; $("#connect-scrim").hidden = !on; $("#connect").setAttribute("aria-expanded", String(on)); };
+  $("#connect-scrim").addEventListener("click", () => openMenu(false));
   document.addEventListener("click", (e) => { if (!e.target.closest(".menu-wrap")) openMenu(false); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") openMenu(false); });
   menu.addEventListener("click", (e) => { const b = e.target.closest("[data-p]"); if (!b) return; openMenu(false); startConnect(b.dataset.p, false); });
@@ -145,16 +147,16 @@
       const used = usage.get(a.id) || 0;
       const gs = groups.filter((g) => g.account_ids.includes(a.id)).map((g) => `<span class="chip" style="cursor:default">${esc(g.name)}</span>`).join(" ");
       const d = daysUntil(a.access_token_expires_at);
-      return `<div class="row" style="grid-template-columns:auto minmax(0,1fr) auto">
+      return `<div class="row acct-row">
         ${avatar(a, 36)}
         <span>
-          <div class="title">${a.label ? `${esc(a.label)} <span class="muted">· </span>` : ""}${esc(handle(a))} <span class="muted small">· ${esc(platformName(a.platform))}</span> <button class="btn ghost small" data-label="${a.id}" title="Apelido">✎</button></div>
-          <div class="sub inline">${gs || '<span class="muted">sem grupo</span>'} · <span>${used} publicações nas 24 h</span>${d !== null ? ` · <span title="Renovação automática da chave">chave até ${fmt.date(a.access_token_expires_at)}</span>` : ""}</div>
+          <div class="title">${a.label ? `${esc(a.label)} <span class="muted">· </span>` : ""}${esc(handle(a))} <span class="muted small">· ${esc(platformName(a.platform))}</span></div>
+          <div class="sub acct-meta"><span class="inline">${gs || '<span class="muted">sem grupo</span>'}</span><span>${used} publicações nas 24 h</span>${d !== null ? `<span title="Renovação automática da chave">chave até ${fmt.date(a.access_token_expires_at)}</span>` : ""}</div>
           <div class="bar ${used >= 90 ? "bad" : used >= 60 ? "warn" : ""}" style="max-width:220px;margin-top:6px"><i style="width:${Math.min(100, used)}%"></i></div>
         </span>
-        <span class="stack" style="justify-items:end">
+        <span class="acct-side">
           <span class="pill ${kind}">${esc(label)}</span>
-          <span class="inline">${a.status !== "connected" ? `<button class="btn small" data-reconnect="${a.id}">Reconectar</button>` : `<button class="btn ghost small" data-disconnect="${a.id}">Desconectar</button>`}<button class="btn danger small" data-remove="${a.id}">Remover</button></span>
+          <span class="inline"><button class="btn ghost small" data-label="${a.id}" title="Apelido" aria-label="Editar apelido">✎</button>${a.status !== "connected" ? `<button class="btn small" data-reconnect="${a.id}">Reconectar</button>` : `<button class="btn ghost small" data-disconnect="${a.id}">Desconectar</button>`}<button class="btn danger small" data-remove="${a.id}">Remover</button></span>
         </span>
       </div>`;
     }).join("") : `<div class="empty">Nenhuma conta ainda. Clique em <b>+ Conectar</b> e escolha a rede.</div>`;

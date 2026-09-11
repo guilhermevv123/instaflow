@@ -15,7 +15,7 @@
 
 .hero-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .hero-logo { display: block; height: 40px; width: auto; }
-.badge { display: inline-flex; align-items: center; gap: 9px; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255, 190, 26, .32); background: rgba(255, 138, 0, .08); color: #FFD27A; font: 600 .7rem/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+.badge { display: inline-flex; align-items: center; gap: 9px; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255, 190, 26, .32); background: rgba(255, 138, 0, .08); color: #FFD27A; font: 600 .75rem/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; }
 .badge b { width: 7px; height: 7px; border-radius: 50%; background: #FFBE1A; animation: live 1.8s ease-out infinite; }
 @keyframes live { 0% { box-shadow: 0 0 0 0 rgba(255, 190, 26, .7); } 70%, 100% { box-shadow: 0 0 0 9px rgba(255, 190, 26, 0); } }
 
@@ -113,7 +113,7 @@
 .login-links { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: .9rem; }
 .login-links a { color: var(--accent); font-weight: 600; text-decoration: none; }
 .login-links a:hover { text-decoration: underline; text-underline-offset: 3px; }
-.login-foot { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font: 500 .68rem/1.4 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.login-foot { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font: 500 .75rem/1.4 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
 .login-foot svg { width: 13px; height: 13px; flex: none; }
 
 .login-msg { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; font-size: .9rem; animation: pop .35s cubic-bezier(.22, 1, .36, 1); }

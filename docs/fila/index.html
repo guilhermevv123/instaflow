@@ -20,7 +20,7 @@
     <div><div class="eyebrow">O que saiu, o que falhou e por quê</div><h1 class="h1">Fila e histórico</h1></div>
     <div class="actions"><button class="btn ghost" id="refresh">Atualizar status</button><a class="btn" href="../criar/">+ Criar</a></div>
   </div>
-  <div class="seg" id="tabs">
+  <div class="seg tabs" id="tabs">
     <button data-t="upcoming" class="on">Próximas</button><button data-t="running">Em andamento</button><button data-t="done">Concluídas</button><button data-t="failed">Com falhas</button><button data-t="canceled">Canceladas</button>
   </div>
   <section class="card"><div class="list" id="list"><div class="sk-list" aria-busy="true"><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:55%"></span><span class="sk sk-line thin" style="width:35%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:65%"></span><span class="sk sk-line thin" style="width:30%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:48%"></span><span class="sk sk-line thin" style="width:40%"></span></span><span class="sk sk-pill"></span></div></div></div></section>
@@ -70,7 +70,7 @@
   function render() {
     const list = filtered();
     $("#list").innerHTML = list.length ? list.map((p) => `
-      <div class="row link" data-open="${p.id}">
+      <div class="row link post-row" data-open="${p.id}">
         <span class="chip time">${p.scheduled_at ? fmt.dateTimeLong(p.scheduled_at) : "imediato"}</span>
         <span><div class="title">${esc(p.title || p.caption.slice(0, 70) || "(sem título)")}</div><div class="sub">${PLACEMENT[p.placement]} · ${p.targets_total} contas · criada ${fmt.relative(p.created_at)}</div></span>
         ${postSummaryPill(p)}

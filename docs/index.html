@@ -39,7 +39,7 @@
   const in7d = new Date(Date.now() + 7 * 86400000).toISOString();
 
   // confere no Post for Me o que já deveria ter saído (em segundo plano)
-  api("/sync").then((r) => { if (r.checked) load(); }).catch(() => {});
+  api("/sync", { method: "POST", body: {} }).then((r) => { if (r.checked) load(); }).catch(() => {});
 
   async function load() {
     const [{ data: next }, { data: failed }, { data: accounts }, { data: todayPosts }] = await Promise.all([
@@ -64,7 +64,7 @@
     if (!(accounts || []).length) alerts.innerHTML = `<div class="warn-box split"><span>Nenhuma conta conectada ainda.</span><a class="btn small" href="contas/">Conectar Instagram</a></div>`;
 
     document.getElementById("next").innerHTML = (next || []).length ? next.map((p) => `
-      <a class="row link" href="fila/?post=${p.id}" style="text-decoration:none;color:inherit">
+      <a class="row link post-row" href="fila/?post=${p.id}" style="text-decoration:none;color:inherit">
         <span class="chip time">${p.scheduled_at ? fmt.dateTimeLong(p.scheduled_at) : "agora"}</span>
         <span><div class="title">${esc(p.title || p.caption.slice(0, 60) || "(sem título)")}</div><div class="sub">${PLACEMENT[p.placement]} · ${p.targets_total} contas</div></span>
         ${postSummaryPill(p)}

@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/calendar.css">
 <script src="../assets/config.js"></script>
   <link rel="icon" type="image/svg+xml" href="../assets/brand/instaflow-icon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="../assets/brand/favicon-32.png">
@@ -17,90 +18,198 @@
 <header class="top"></header>
 <main class="shell">
   <div class="page-head">
-    <div><div class="eyebrow">Horário da Bahia</div><h1 class="h1">Calendário</h1></div>
-    <div class="actions">
-      <div class="seg"><button id="view-month" class="on">Mês</button><button id="view-list">Lista</button></div>
-      <a class="btn" href="../criar/">+ Criar</a>
+    <div><div class="eyebrow">Horário da Bahia · arraste para reagendar</div><h1 class="h1">Calendário</h1></div>
+    <div class="actions"><a class="btn" href="../criar/" title="Criar publicação (N)">+ Criar</a></div>
+  </div>
+  <section class="ec" id="ec" aria-label="Calendário de publicações">
+    <div class="ec-bar">
+      <div class="ec-nav">
+        <button type="button" class="btn ghost small" id="ec-today" title="Hoje (T)">Hoje</button>
+        <div class="ec-arrows">
+          <button type="button" class="ec-ib" id="ec-prev" aria-label="Anterior" title="Anterior (←)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <button type="button" class="ec-ib" id="ec-next" aria-label="Próximo" title="Próximo (→)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></button>
+        </div>
+        <h2 class="ec-title" id="ec-title" aria-live="polite"></h2>
+      </div>
+      <div class="ec-tools">
+        <div class="seg ec-views" id="ec-views" role="tablist" aria-label="Visão"></div>
+        <div class="ec-nets" id="ec-nets" aria-label="Filtrar por rede"></div>
+      </div>
     </div>
-  </div>
-  <div class="cal-head">
-    <button class="btn ghost small" id="prev">‹ Anterior</button>
-    <h2 id="label"></h2>
-    <div class="inline"><button class="btn ghost small" id="today">Hoje</button><button class="btn ghost small" id="next">Próximo ›</button></div>
-  </div>
-  <div id="month"></div>
-  <div id="list" class="card" hidden></div>
+    <div class="ec-body" id="ec-body"><div class="ec-empty"><span class="spinner"></span> Carregando o calendário…</div></div>
+    <div class="ec-legend">
+      <span class="k-sched"><i></i>Agendada</span><span class="k-run"><i></i>Publicando</span><span class="k-ok"><i></i>Publicada</span><span class="k-bad"><i></i>Com falha</span>
+      <span class="tip">Arraste uma publicação agendada para mudar o dia ou o horário · atalhos: T, ←, →, M, S, D, A</span>
+    </div>
+  </section>
+  <div class="ec-pop" id="ec-pop" role="dialog" hidden></div>
 </main>
 <script type="module">
-  import { supa, requireAuth, renderNav, fmt, esc, postSummaryPill, PLACEMENT, toast, pageReady } from "../assets/app.js";
+  import { requireAuth, renderNav, api, toast, confirmDialog, pageReady, PLATFORMS, platformIcon, esc, fmt } from "../assets/app.js";
+  import { VIEWS, rangeFor, step, titleFor, todayKey, nowMin, loadPosts, isoAt, hhmm, label, openPop, closePop, chip, nameOf } from "../assets/cal-core.js";
+  import { monthView, miniView, gridView, agendaView, scrollGrid, hourPx } from "../assets/cal-views.js";
+  import { enableDrag } from "../assets/cal-drag.js";
   renderNav("calendario", "../");
-  const session = await requireAuth("../");
+  await requireAuth("../");
 
-  let view = "month";
-  const bahiaNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bahia" }));
-  let year = bahiaNow.getFullYear(), month = bahiaNow.getMonth();
-  const todayKey = fmt.dayKey(new Date().toISOString());
   const $ = (s) => document.querySelector(s);
+  const ec = $("#ec"), body = $("#ec-body"), pop = $("#ec-pop");
+  const small = window.matchMedia("(max-width: 700px)");
+  const q = new URLSearchParams(location.search);
+  const saved = (() => { try { return localStorage.getItem("if.cal.view"); } catch { return null; } })();
+  // no celular a semana vira "3 dias" (7 colunas não cabem); no computador, o contrário
+  const fit = (v) => (small.matches && v === "week" ? "days3" : !small.matches && v === "days3" ? "week" : v);
+  let view = fit(VIEWS[q.get("v")] ? q.get("v") : VIEWS[saved] ? saved : "month");
+  let anchor = /^\d{4}-\d{2}-\d{2}$/.test(q.get("d") || "") ? q.get("d") : todayKey();
+  let net = "all", sel = anchor, posts = [], seq = 0, scrolledFor = "";
 
-  $("#prev").onclick = () => { month--; if (month < 0) { month = 11; year--; } render(); };
-  $("#next").onclick = () => { month++; if (month > 11) { month = 0; year++; } render(); };
-  $("#today").onclick = () => { year = bahiaNow.getFullYear(); month = bahiaNow.getMonth(); render(); };
-  $("#view-month").onclick = () => setView("month");
-  $("#view-list").onclick = () => setView("list");
-  function setView(v) { view = v; $("#view-month").classList.toggle("on", v === "month"); $("#view-list").classList.toggle("on", v === "list"); render(); }
-
-  async function fetchPosts() {
-    // janela com folga: o mês em UTC-3 pode começar/terminar em outro dia UTC
-    const start = new Date(Date.UTC(year, month, 1) - 2 * 86400000).toISOString();
-    const end = new Date(Date.UTC(year, month + 1, 1) + 2 * 86400000).toISOString();
-    const { data, error } = await supa.from("post_overview").select("*").gte("scheduled_at", start).lt("scheduled_at", end).neq("status", "canceled").order("scheduled_at");
-    if (error) throw error;
-    return data || [];
+  function paintControls() {
+    const list = small.matches ? ["month", "days3", "day", "agenda"] : ["month", "week", "day", "agenda"];
+    $("#ec-views").innerHTML = list.map((v) => `<button type="button" role="tab" data-view="${v}" class="${v === view ? "on" : ""}" aria-selected="${v === view}" title="${VIEWS[v].name} (${VIEWS[v].key.toUpperCase()})">${VIEWS[v].name}</button>`).join("");
+    $("#ec-nets").innerHTML = [["all", "Todas as redes"], ...Object.keys(PLATFORMS).map((p) => [p, PLATFORMS[p].short])]
+      .map(([k, name]) => `<button type="button" class="chip${net === k ? " on" : ""}" data-net="${k}" aria-pressed="${net === k}">${k === "all" ? "" : platformIcon(k, 16)}${esc(name)}</button>`).join("");
+    $("#ec-title").textContent = titleFor(view, anchor);
   }
 
-  async function render() {
-    $("#label").textContent = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(year, month, 1)).replace(/^./, (c) => c.toUpperCase());
-    let posts = [];
-    try { posts = await fetchPosts(); } catch (e) { toast(e.message, "error"); }
-    const byDay = new Map();
-    for (const p of posts) {
-      const k = fmt.dayKey(p.scheduled_at);
-      if (!byDay.has(k)) byDay.set(k, []);
-      byDay.get(k).push(p);
+  async function load() {
+    const mine = ++seq, r = rangeFor(view, anchor);
+    paintControls();
+    ec.classList.add("loading");
+    try {
+      const data = await loadPosts(r.start, r.days);
+      if (mine !== seq) return; // resposta atrasada: o período já mudou
+      posts = data;
+    } catch (e) {
+      if (mine === seq) toast(e.message || "Não consegui carregar o calendário.", "error");
+    } finally {
+      if (mine === seq) ec.classList.remove("loading");
     }
-    $("#month").hidden = view !== "month";
-    $("#list").hidden = view !== "list";
-    if (view === "list") return renderList(posts);
-
-    const first = new Date(year, month, 1);
-    const startDow = (first.getDay() + 6) % 7; // segunda = 0
-    const days = new Date(year, month + 1, 0).getDate();
-    const cells = [];
-    for (let i = 0; i < startDow; i++) cells.push(null);
-    for (let d = 1; d <= days; d++) cells.push(d);
-    while (cells.length % 7) cells.push(null);
-    const hd = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"].map((h) => `<div class="hd">${h}</div>`).join("");
-    $("#month").innerHTML = `<div class="cal">${hd}${cells.map((d) => {
-      if (!d) return `<div class="d out"></div>`;
-      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      const items = byDay.get(key) || [];
-      const shown = items.slice(0, 3);
-      return `<div class="d ${key === todayKey ? "today" : ""}"><span class="n">${d}</span>
-        ${shown.map((p) => `<a class="ev ${p.placement} ${p.status === "processed" ? "done" : ""} ${p.targets_failed ? "bad" : ""}" href="../fila/?post=${p.id}" title="${esc(p.title || p.caption)}">${fmt.time(p.scheduled_at)} · ${esc(p.title || p.caption.slice(0, 18))} · ${p.targets_total}</a>`).join("")}
-        ${items.length > 3 ? `<span class="more">+${items.length - 3}</span>` : ""}
-      </div>`;
-    }).join("")}</div>`;
+    if (mine === seq) paint();
   }
 
-  function renderList(posts) {
-    $("#list").innerHTML = posts.length ? `<div class="list">${posts.map((p) => `
-      <a class="row link" href="../fila/?post=${p.id}" style="text-decoration:none;color:inherit">
-        <span class="chip time">${fmt.dateTimeLong(p.scheduled_at)}</span>
-        <span><div class="title">${esc(p.title || p.caption.slice(0, 70))}</div><div class="sub">${PLACEMENT[p.placement]} · ${p.targets_total} contas</div></span>
-        ${postSummaryPill(p)}
-      </a>`).join("")}</div>` : `<div class="empty">Nada agendado neste mês.</div>`;
+  const visible = () => (net === "all" ? posts : posts.filter((p) => p.nets.has(net)));
+
+  function paint() {
+    closePop();
+    paintControls();
+    const r = rangeFor(view, anchor), list = visible();
+    const prevScroll = body.querySelector(".ec-scroll")?.scrollTop;
+    if (view === "month" && small.matches) {
+      if (sel.slice(0, 7) !== anchor.slice(0, 7)) sel = todayKey().slice(0, 7) === anchor.slice(0, 7) ? todayKey() : anchor.slice(0, 8) + "01";
+      body.innerHTML = miniView(list, anchor, sel);
+    } else if (view === "month") body.innerHTML = monthView(list, anchor);
+    else if (view === "agenda") body.innerHTML = agendaView(list, r.start, r.days);
+    else {
+      body.innerHTML = gridView(list, r.start, r.days);
+      const key = `${view}:${r.start}`; // rola para um horário útil só quando muda o período
+      if (scrolledFor !== key || prevScroll === undefined) { scrolledFor = key; scrollGrid(body, list); }
+      else body.querySelector(".ec-scroll").scrollTop = prevScroll;
+    }
+    const u = new URL(location.href);
+    u.searchParams.set("v", view);
+    u.searchParams.set("d", anchor);
+    history.replaceState(null, "", u);
   }
-  render();
+
+  function go(v, a) {
+    if (v) view = fit(v);
+    if (a) anchor = a;
+    try { localStorage.setItem("if.cal.view", view); } catch {}
+    load();
+  }
+  $("#ec-prev").onclick = () => go(null, step(view, anchor, -1));
+  $("#ec-next").onclick = () => go(null, step(view, anchor, 1));
+  $("#ec-today").onclick = () => { sel = todayKey(); scrolledFor = ""; go(null, todayKey()); };
+  $("#ec-views").onclick = (e) => { const b = e.target.closest("[data-view]"); if (b) go(b.dataset.view); };
+  $("#ec-nets").onclick = (e) => { const b = e.target.closest("[data-net]"); if (b) { net = b.dataset.net; paint(); } };
+  small.addEventListener?.("change", () => { view = fit(view); paint(); });
+
+  // Criar a partir do calendário: dia → 09:00 (ou a próxima hora cheia, se for hoje)
+  function createHref(k, min) {
+    if (min === undefined) min = k === todayKey() ? Math.max(9 * 60, Math.ceil((nowMin() + 30) / 60) * 60) : 9 * 60;
+    return `../criar/?quando=${k}T${hhmm(Math.min(min, 23 * 60 + 30))}`;
+  }
+  function slotPop(col, y) {
+    const px = hourPx(ec), rect = col.getBoundingClientRect(), k = col.dataset.col;
+    const min = Math.max(0, Math.min(23 * 60 + 30, Math.floor(((y - rect.top) / px) * 2) * 30));
+    const ind = document.createElement("div");
+    ind.className = "ec-ind";
+    ind.style.top = `${(min / 60) * px}px`;
+    ind.textContent = hhmm(min);
+    col.appendChild(ind);
+    const past = Date.parse(isoAt(k, min)) <= Date.now();
+    openPop(ind.getBoundingClientRect(), `<h3>${esc(label.dayLong(k))} · ${hhmm(min)}</h3>` + (past ? `<p class="help">Esse horário já passou.</p>` : `<a class="btn small" href="${createHref(k, min)}">+ Criar publicação neste horário</a>`));
+    const obs = new MutationObserver(() => { if (pop.hidden) { ind.remove(); obs.disconnect(); } });
+    obs.observe(pop, { attributes: true, attributeFilter: ["hidden"] });
+  }
+
+  body.addEventListener("click", (e) => {
+    const t = e.target;
+    const more = t.closest("[data-more]");
+    if (more) {
+      const k = more.dataset.more;
+      openPop(more.getBoundingClientRect(), `<h3>${esc(label.dayLong(k))}</h3>${visible().filter((p) => p.key === k).map(chip).join("")}${k >= todayKey() ? `<a class="btn ghost small" href="${createHref(k)}">+ Criar neste dia</a>` : ""}`);
+      return;
+    }
+    const add = t.closest("[data-add]");
+    if (add) { location.href = createHref(add.dataset.add); return; }
+    const pick = t.closest("[data-pick]");
+    if (pick) { sel = pick.dataset.pick; paint(); return; }
+    const day = t.closest("[data-goto]");
+    if (day) { go("day", day.dataset.goto); return; }
+    const col = t.closest("[data-col]");
+    if (col && !t.closest("[data-id]")) slotPop(col, e.clientY);
+  });
+  body.addEventListener("dblclick", (e) => {
+    const cell = e.target.closest("[data-drop-day]");
+    if (cell && !e.target.closest("[data-id], button") && cell.dataset.dropDay >= todayKey()) location.href = createHref(cell.dataset.dropDay);
+  });
+
+  // Arrastar para reagendar
+  enableDrag(body, { find: (id) => posts.find((p) => p.id === id), hourPx: () => hourPx(ec), onDrop: reschedule });
+  async function reschedule(p, { key, min }) {
+    const iso = isoAt(key, min);
+    if (Date.parse(iso) < Date.now() + 60000) { toast("Esse horário já passou. Escolha um horário no futuro.", "error"); return; }
+    const n = p.targets_total;
+    if (!(await confirmDialog(`Reagendar “${nameOf(p)}” para ${fmt.dateTimeLong(iso)}? Vale para ${n === 1 ? "a conta escolhida" : `as ${n} contas`}.`, { okLabel: "Reagendar" }))) return;
+    const old = { key: p.key, min: p.min, ms: p.ms, scheduled_at: p.scheduled_at };
+    Object.assign(p, { key, min, ms: Date.parse(iso), scheduled_at: iso });
+    paint();
+    try {
+      await api(`/posts/${p.id}/reschedule`, { method: "POST", body: { scheduled_at: iso } });
+      toast(`Reagendada para ${fmt.dateTimeLong(iso)}.`, "ok");
+      load();
+    } catch (err) {
+      Object.assign(p, old);
+      paint();
+      toast(err.message || "Não consegui reagendar.", "error");
+    }
+  }
+
+  // Atalhos de teclado (fora de campos de texto e diálogos)
+  document.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+    if (e.target.closest?.("input, textarea, select, [contenteditable]") || document.querySelector("dialog[open]")) return;
+    const k = e.key.toLowerCase();
+    if (k === "arrowleft") $("#ec-prev").click();
+    else if (k === "arrowright") $("#ec-next").click();
+    else if (k === "t" || k === "h") $("#ec-today").click();
+    else if (k === "n" || k === "c") location.href = "../criar/";
+    else {
+      const v = Object.keys(VIEWS).find((x) => VIEWS[x].key === k) || (k === "w" ? "week" : null);
+      if (!v) return;
+      go(v);
+    }
+    e.preventDefault();
+  });
+
+  // Linha do "agora" anda sozinha; situação das publicações atualiza a cada 2 min
+  setInterval(() => { const line = body.querySelector(".ec-now"); if (line) line.style.top = `calc(var(--ec-hour) * ${nowMin() / 60})`; }, 60000);
+  const quiet = () => !document.hidden && pop.hidden && !document.documentElement.classList.contains("ec-dragging") && !document.querySelector("dialog[open]");
+  setInterval(() => { if (quiet()) load(); }, 120000);
+  document.addEventListener("visibilitychange", () => { if (quiet()) load(); });
+
+  await load();
   pageReady();
 </script>
 </body>

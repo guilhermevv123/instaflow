@@ -12,6 +12,7 @@
 //   POST   /media/upload-url          URL assinada para subir um arquivo
 //   POST   /posts                     cria/agenda uma publicação em N contas
 //   PUT    /posts/:id                 edita (só enquanto agendada)
+//   POST   /posts/:id/reschedule      muda só o horário (arrastar no calendário)
 //   DELETE /posts/:id                 cancela (só enquanto agendada)
 //   POST   /posts/:id/sync            confere status/resultados no Post for Me
 //   POST   /posts/:id/retry           reenvia agora para as contas que falharam
@@ -114,6 +115,7 @@ Deno.serve(async (req) => {
     if (req.method === "DELETE" && seg[0] === "posts" && seg.length === 2) return json(req, await cancelPost(db, caller, seg[1]));
     if (req.method === "POST" && seg[0] === "posts" && seg[2] === "sync") return json(req, await syncPost(db, caller, seg[1]));
     if (req.method === "POST" && seg[0] === "posts" && seg[2] === "retry") return json(req, await retryPost(db, caller, seg[1]), 201);
+    if (req.method === "POST" && seg[0] === "posts" && seg[2] === "reschedule") return json(req, await reschedulePost(db, caller, seg[1], await readJson<{ scheduled_at?: string }>(req)));
     if (req.method === "POST" && path === "/sync") return json(req, await syncPending(db, caller));
     if (req.method === "GET" && path === "/usage") return json(req, await usage(db, caller));
     if (req.method === "POST" && path === "/webhooks/setup") return json(req, await ensureWebhook(db, true));
@@ -448,6 +450,25 @@ async function updatePost(db: Db, caller: Caller, id: string, input: PostInput) 
   await db.from("post_targets").delete().eq("post_id", id);
   await db.from("post_targets").insert(input.account_ids.map((account_id) => ({ post_id: id, account_id, status: "pending" })));
   return { id, status: pfmPost.status };
+}
+
+// Muda só o horário (arrastar no calendário): reenvia ao Post for Me o que já
+// está salvo (legenda, mídia, contas e opções), com a nova data.
+async function reschedulePost(db: Db, caller: Caller, id: string, body: { scheduled_at?: string }) {
+  if (!body?.scheduled_at) throw new HttpError(400, "Informe o novo horário.");
+  const post = await getPost(db, caller, id);
+  const { data: targets, error } = await db.from("post_targets").select("account_id").eq("post_id", id);
+  if (error) throw new HttpError(500, error.message);
+  return updatePost(db, caller, id, {
+    title: post.title,
+    caption: post.caption ?? "",
+    placement: post.placement,
+    media: Array.isArray(post.media) ? post.media : [],
+    account_ids: (targets ?? []).map((t) => t.account_id),
+    scheduled_at: body.scheduled_at,
+    caption_overrides: post.caption_overrides ?? {},
+    platform_options: (post.options ?? {}) as PlatformOptions,
+  });
 }
 
 async function cancelPost(db: Db, caller: Caller, id: string) {

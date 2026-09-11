@@ -19,7 +19,8 @@
 #   4. publica as funções api e pfm-webhook
 #   5. insere o primeiro admin em allowed_users
 #   6. escreve site/assets/config.js
-#   7. registra o webhook no Post for Me (via função api, com token do admin? não: via curl direto)
+#   (o webhook do Post for Me é registrado sozinho na primeira vez que a página
+#    Contas sincroniza, ou pelo botão em Config → "Registrar avisos")
 #
 # NUNCA rode `supabase config push` aqui (sobrescreve o Auth do painel).
 set -euo pipefail

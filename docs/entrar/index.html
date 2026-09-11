@@ -116,6 +116,19 @@
   const $ = (s) => document.querySelector(s);
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // Janela pop-up voltando da autorização de uma rede (caiu aqui sem sessão):
+  // avisa a página que a abriu e fecha. Ninguém precisa entrar de novo.
+  {
+    const back = decodeURIComponent(qs("next") || "");
+    if (window.opener && window.opener !== window && /isSuccess=/.test(back)) {
+      const p = new URLSearchParams(back.split("?")[1] || "");
+      try { window.opener.postMessage({ type: "instaflow:connected", ok: p.get("isSuccess") === "true", n: (p.get("accountIds") || "").split(",").filter(Boolean).length, error: p.get("error") || "" }, "*"); } catch {}
+      document.body.innerHTML = '<main class="shell narrow"><div class="card" style="text-align:center"><h1 class="h1">Pronto!</h1><p class="muted">Conta conectada. Pode fechar esta janela e voltar para o InstaFlow.</p></div></main>';
+      setTimeout(() => window.close(), 400);
+      await new Promise(() => {});
+    }
+  }
+
   // ── Cena do painel da marca: 1 post → 12 perfis (em loop de 6 s) ──
   (() => {
     const orbit = $("#orbit");

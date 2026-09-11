@@ -13,6 +13,9 @@ const extraOrigins = (Deno.env.get("INSTAFLOW_ALLOWED_ORIGINS") ?? Deno.env.get(
 export function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
   const ok = extraOrigins.includes(origin) || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+    // painel hospedado no EasyPanel (domínio padrão) ou direto no IP do servidor
+    /^https:\/\/([a-z0-9-]+\.)+easypanel\.host$/i.test(origin) ||
+    /^https?:\/\/5\.181\.218\.72(:\d+)?$/.test(origin) ||
     origin.startsWith("file://") || extraOrigins.includes("*");
   return {
     "Access-Control-Allow-Origin": ok ? origin : (extraOrigins[0] ?? "null"),

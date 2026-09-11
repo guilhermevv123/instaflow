@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biblioteca · InstaFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/config.js"></script>
+</head>
+<body>
+<header class="top"></header>
+<main class="shell">
+  <div class="page-head">
+    <div><div class="eyebrow">Fotos e vídeos já enviados</div><h1 class="h1">Biblioteca</h1></div>
+    <div class="actions"><button class="btn ghost" id="upload">Enviar arquivos</button><button class="btn" id="use" disabled>Usar em nova publicação</button></div>
+  </div>
+  <input id="file" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" hidden>
+  <div id="progress" class="stack"></div>
+  <div class="media-grid" id="grid"><div class="empty">Carregando…</div></div>
+  <p class="help">Clique para selecionar. Os arquivos ficam hospedados no Post for Me; excluir aqui só remove da lista.</p>
+</main>
+<script type="module">
+  import { supa, requireAuth, renderNav, fmt, esc, toast } from "../assets/app.js";
+  import { probe, uploadFile, kindOf } from "../assets/media.js";
+  const session = await requireAuth("../");
+  renderNav("biblioteca", "../", session.user.email);
+  const $ = (s) => document.querySelector(s);
+  let items = [], sel = new Set();
+
+  async function load() {
+    const { data, error } = await supa.from("media").select("*").order("created_at", { ascending: false }).limit(300);
+    if (error) { toast(error.message, "error"); return; }
+    items = data || [];
+    $("#grid").innerHTML = items.length ? items.map((m) => `
+      <div class="thumb ${sel.has(m.id) ? "on" : ""}" data-id="${m.id}" title="${esc(m.name || "")} · ${fmt.bytes(m.size_bytes)} · ${fmt.date(m.created_at)}">
+        ${m.kind === "video" ? `<video src="${esc(m.url)}" muted preload="metadata"></video>` : `<img src="${esc(m.url)}" alt="" loading="lazy">`}
+        <span class="tag">${m.kind === "video" ? (m.duration_s ? Math.round(m.duration_s) + "s" : "vídeo") : (m.width ? `${m.width}×${m.height}` : "foto")}</span>
+        <button class="x" data-del="${m.id}" aria-label="Excluir">×</button>
+      </div>`).join("") : `<div class="empty">Nenhuma mídia ainda. Clique em <b>Enviar arquivos</b>.</div>`;
+    $("#use").disabled = !sel.size;
+    $("#use").textContent = sel.size ? `Usar ${sel.size} em nova publicação` : "Usar em nova publicação";
+  }
+  $("#grid").addEventListener("click", async (e) => {
+    const del = e.target.closest("[data-del]");
+    if (del) { e.stopPropagation(); if (!confirm("Remover esta mídia da biblioteca?")) return; await supa.from("media").delete().eq("id", del.dataset.del); sel.delete(del.dataset.del); await load(); return; }
+    const t = e.target.closest("[data-id]"); if (!t) return;
+    sel.has(t.dataset.id) ? sel.delete(t.dataset.id) : sel.add(t.dataset.id);
+    t.classList.toggle("on", sel.has(t.dataset.id));
+    $("#use").disabled = !sel.size; $("#use").textContent = sel.size ? `Usar ${sel.size} em nova publicação` : "Usar em nova publicação";
+  });
+  $("#use").addEventListener("click", () => { sessionStorage.setItem("instaflow_media", JSON.stringify(items.filter((m) => sel.has(m.id)))); location.href = "../criar/"; });
+  $("#upload").addEventListener("click", () => $("#file").click());
+  $("#file").addEventListener("change", async () => {
+    const files = [...$("#file").files]; $("#file").value = "";
+    for (const f of files) {
+      if (!kindOf(f)) { toast(`${f.name}: formato não aceito.`, "error"); continue; }
+      const row = document.createElement("div"); row.className = "split small"; row.innerHTML = `<span>${esc(f.name)}</span><span class="bar" style="width:160px"><i style="width:0"></i></span>`; $("#progress").appendChild(row);
+      try { const meta = await probe(f); await uploadFile(f, meta, (p) => { row.querySelector("i").style.width = `${Math.round(p * 100)}%`; }); row.remove(); }
+      catch (e) { row.innerHTML = `<span class="error-box">${esc(f.name)}: ${esc(e.message)}</span>`; }
+    }
+    await load();
+  });
+  await load();
+</script>
+</body>
+</html>

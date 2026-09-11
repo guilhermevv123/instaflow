@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Criar publicação · InstaFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/config.js"></script>
+</head>
+<body>
+<header class="top"></header>
+<main class="shell">
+  <div class="page-head">
+    <div><div class="eyebrow" id="mode-label">Nova publicação</div><h1 class="h1">Um post, várias contas</h1></div>
+  </div>
+  <form id="form" class="compose" novalidate>
+    <div class="stack" style="gap:16px">
+      <section class="card">
+        <div class="field"><label for="title">Nome interno (só você vê)</label><input id="title" type="text" placeholder="Ex.: Promo de sexta" maxlength="80"></div>
+        <div class="field"><span class="label">Tipo</span>
+          <div class="seg" id="placement"><button type="button" data-v="timeline" class="on">Feed</button><button type="button" data-v="reels">Reels</button><button type="button" data-v="stories">Stories</button></div>
+          <p class="help" id="placement-help">Feed: 1 foto/vídeo ou carrossel de até 10 itens.</p>
+        </div>
+        <div class="field"><span class="label">Mídia</span>
+          <div class="drop" id="drop">Arraste fotos ou vídeos aqui, ou <u>clique para escolher</u>. <span class="small">JPG, PNG, WebP, MP4, MOV.</span></div>
+          <input id="file" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" hidden>
+          <div class="inline"><button type="button" class="btn ghost small" id="from-lib">Da biblioteca</button><span class="help" id="media-count"></span></div>
+          <div class="thumbs" id="thumbs"></div>
+          <div id="media-msgs" class="stack"></div>
+        </div>
+        <div class="field"><label for="caption">Legenda</label><textarea id="caption" maxlength="2200" placeholder="Escreva a legenda. #hashtags e @menções valem."></textarea>
+          <div class="split"><span class="help" id="cap-count">0 / 2200</span><label class="check small"><input type="checkbox" id="vary"> Variar a legenda por conta</label></div>
+        </div>
+        <div id="overrides" class="stack" hidden></div>
+        <div id="reels-opts" class="stack" hidden>
+          <label class="check"><input type="checkbox" id="share_to_feed" checked> Mostrar o Reels também no Feed</label>
+        </div>
+        <div class="field" id="collab-field"><label for="collaborators">Colaboradores (opcional, até 3 @usuários separados por vírgula)</label><input id="collaborators" type="text" placeholder="@parceiro, @loja2"></div>
+      </section>
+      <section class="card">
+        <div class="split"><h2>Contas</h2><span class="muted small" id="acct-count">0 selecionadas</span></div>
+        <div class="inline" id="group-chips"></div>
+        <div class="acct-pick" id="acct-pick"><div class="empty">Carregando contas…</div></div>
+      </section>
+    </div>
+    <aside class="stack" style="gap:16px">
+      <section class="card">
+        <h2>Quando</h2>
+        <div class="seg" id="when"><button type="button" data-v="schedule" class="on">Agendar</button><button type="button" data-v="now">Publicar agora</button></div>
+        <div class="field" id="when-field"><label for="scheduled_at">Data e hora (Bahia)</label><input id="scheduled_at" type="datetime-local" step="60"></div>
+        <p class="help" id="when-help"></p>
+        <div id="submit-msgs" class="stack"></div>
+        <button class="btn block" id="submit" type="submit">Agendar</button>
+        <a class="btn ghost block" href="../fila/">Cancelar</a>
+      </section>
+      <section class="card">
+        <div class="split"><h2>Prévia</h2><select id="preview-acct" class="input" style="width:auto;max-width:170px"></select></div>
+        <div class="phone" id="phone"><div class="ph" id="ph">sem mídia</div><div class="cap" id="ph-cap"></div></div>
+      </section>
+    </aside>
+  </form>
+  <dialog class="modal" id="lib"><div class="inner"><div class="modal-head"><h2>Biblioteca</h2><button type="button" class="btn ghost small" id="lib-close">Fechar</button></div><div class="media-grid" id="lib-grid"></div><div class="split"><span class="muted small" id="lib-count"></span><button type="button" class="btn" id="lib-use">Usar selecionadas</button></div></div></dialog>
+</main>
+<script type="module">
+  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountHealth, loadAccounts, loadGroups, toast, qs, defaultScheduleValue, PLACEMENT } from "../assets/app.js";
+  import { kindOf, probe, validateSet, uploadFile } from "../assets/media.js";
+  const session = await requireAuth("../");
+  renderNav("criar", "../", session.user.email);
+  const $ = (s) => document.querySelector(s);
+
+  const state = { placement: "timeline", when: "schedule", items: [], selected: new Set(), overrides: {}, editId: null, pfmStatus: null };
+  const accounts = (await loadAccounts()).filter((a) => a.status === "connected");
+  const groups = await loadGroups();
+  const accById = new Map(accounts.map((a) => [a.id, a]));
+
+  // ------------------------------------------------------------- tipo / quando
+  const help = { timeline: "Feed: 1 foto/vídeo ou carrossel de até 10 itens. Um vídeo sozinho vira Reels compartilhado no Feed.", reels: "Reels: exatamente 1 vídeo vertical (9:16), de 3 s a 15 min, até 300 MB.", stories: "Stories: cada foto/vídeo vira um Story separado (vídeo até 60 s)." };
+  $("#placement").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    state.placement = b.dataset.v;
+    $("#placement").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    $("#placement-help").textContent = help[state.placement];
+    $("#reels-opts").hidden = state.placement !== "reels";
+    $("#collab-field").hidden = state.placement === "stories";
+    $("#caption").parentElement.hidden = false;
+    validateMedia(); renderPreview();
+  });
+  $("#when").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    state.when = b.dataset.v;
+    $("#when").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    $("#when-field").hidden = state.when === "now";
+    $("#submit").textContent = state.when === "now" ? "Publicar agora" : "Agendar";
+    updateWhenHelp();
+  });
+  $("#scheduled_at").value = defaultScheduleValue();
+  $("#scheduled_at").min = fmt.toLocalInput(new Date().toISOString());
+  $("#scheduled_at").addEventListener("input", updateWhenHelp);
+  function updateWhenHelp() {
+    const n = state.selected.size;
+    if (state.when === "now") { $("#when-help").textContent = `Sai em até 2 minutos em ${n} conta${n === 1 ? "" : "s"}.`; return; }
+    const iso = fmt.fromLocalInput($("#scheduled_at").value);
+    $("#when-help").textContent = iso ? `${fmt.dateTimeLong(iso)} (${fmt.relative(iso)}) · ${n} conta${n === 1 ? "" : "s"}` : "";
+  }
+
+  // ------------------------------------------------------------- mídia
+  const drop = $("#drop"), fileInput = $("#file");
+  drop.addEventListener("click", () => fileInput.click());
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); addFiles([...e.dataTransfer.files]); });
+  fileInput.addEventListener("change", () => { addFiles([...fileInput.files]); fileInput.value = ""; });
+
+  async function addFiles(files) {
+    for (const file of files) {
+      if (state.items.length >= 10) { toast("Máximo de 10 itens.", "error"); break; }
+      const meta = await probe(file);
+      const item = { id: crypto.randomUUID(), name: file.name, type: file.type, size: file.size, kind: meta.kind, width: meta.width, height: meta.height, duration: meta.duration, previewUrl: meta.previewUrl, url: null, progress: 0, error: null };
+      state.items.push(item);
+      renderThumbs(); validateMedia(); renderPreview();
+      if (!item.kind) continue;
+      uploadFile(file, meta, (p) => { item.progress = p; renderThumbs(); })
+        .then(({ url }) => { item.url = url; item.progress = 1; renderThumbs(); })
+        .catch((e) => { item.error = e.message; renderThumbs(); toast(`${file.name}: ${e.message}`, "error"); });
+    }
+  }
+  function renderThumbs() {
+    $("#thumbs").innerHTML = state.items.map((it, i) => `
+      <div class="thumb" draggable="true" data-i="${i}">
+        ${it.kind === "video" ? `<video src="${it.previewUrl}" muted playsinline></video>` : `<img src="${it.previewUrl}" alt="">`}
+        <span class="tag">${it.kind === "video" ? (it.duration ? Math.round(it.duration) + "s" : "vídeo") : "foto"}</span>
+        ${it.error ? `<span class="warnmark">erro</span>` : (!it.url ? `<div class="prog"><i style="width:${Math.round(it.progress * 100)}%"></i></div>` : "")}
+        <button type="button" class="x" data-rm="${i}" aria-label="Remover">×</button>
+      </div>`).join("");
+    $("#media-count").textContent = state.items.length ? `${state.items.length} item${state.items.length > 1 ? "s" : ""}${state.items.length > 1 ? " · arraste para ordenar" : ""}` : "";
+  }
+  $("#thumbs").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-rm]"); if (!b) return;
+    state.items.splice(Number(b.dataset.rm), 1); renderThumbs(); validateMedia(); renderPreview();
+  });
+  let dragFrom = null;
+  $("#thumbs").addEventListener("dragstart", (e) => { dragFrom = Number(e.target.closest(".thumb")?.dataset.i); });
+  $("#thumbs").addEventListener("dragover", (e) => e.preventDefault());
+  $("#thumbs").addEventListener("drop", (e) => {
+    const to = Number(e.target.closest(".thumb")?.dataset.i);
+    if (dragFrom === null || Number.isNaN(to) || to === dragFrom) return;
+    const [m] = state.items.splice(dragFrom, 1); state.items.splice(to, 0, m); dragFrom = null; renderThumbs(); renderPreview();
+  });
+  function validateMedia() {
+    const { errors, warnings } = validateSet(state.items, state.placement);
+    $("#media-msgs").innerHTML = [...errors.map((m) => `<div class="error-box">${esc(m)}</div>`), ...warnings.map((m) => `<div class="warn-box">${esc(m)}</div>`)].join("");
+    return errors;
+  }
+
+  // biblioteca
+  const lib = $("#lib"); let libSel = new Set(), libItems = [];
+  $("#from-lib").addEventListener("click", async () => {
+    const { data } = await supa.from("media").select("*").order("created_at", { ascending: false }).limit(120);
+    libItems = data || []; libSel = new Set();
+    $("#lib-grid").innerHTML = libItems.length ? libItems.map((m) => `<div class="thumb" data-id="${m.id}">${m.kind === "video" ? `<video src="${esc(m.url)}" muted preload="metadata"></video>` : `<img src="${esc(m.url)}" alt="" loading="lazy">`}<span class="tag">${m.kind === "video" ? "vídeo" : "foto"}</span></div>`).join("") : `<div class="empty">Biblioteca vazia.</div>`;
+    $("#lib-count").textContent = "";
+    lib.showModal();
+  });
+  $("#lib-grid").addEventListener("click", (e) => {
+    const t = e.target.closest("[data-id]"); if (!t) return;
+    const id = t.dataset.id; libSel.has(id) ? libSel.delete(id) : libSel.add(id);
+    t.classList.toggle("on", libSel.has(id)); $("#lib-count").textContent = `${libSel.size} selecionada${libSel.size === 1 ? "" : "s"}`;
+  });
+  $("#lib-close").addEventListener("click", () => lib.close());
+  $("#lib-use").addEventListener("click", () => { addFromLibrary(libItems.filter((m) => libSel.has(m.id))); lib.close(); });
+  function addFromLibrary(list) {
+    for (const m of list) {
+      if (state.items.length >= 10) break;
+      state.items.push({ id: crypto.randomUUID(), name: m.name || "mídia", type: m.mime, size: m.size_bytes || 0, kind: m.kind, width: m.width, height: m.height, duration: m.duration_s ? Number(m.duration_s) : null, previewUrl: m.url, url: m.url, progress: 1 });
+    }
+    renderThumbs(); validateMedia(); renderPreview();
+  }
+  try { const pre = JSON.parse(sessionStorage.getItem("instaflow_media") || "[]"); if (pre.length) { addFromLibrary(pre); sessionStorage.removeItem("instaflow_media"); } } catch {}
+
+  // ------------------------------------------------------------- legenda
+  const cap = $("#caption");
+  cap.addEventListener("input", () => {
+    const tags = (cap.value.match(/#[\wÀ-ſ-]+/g) || []).length;
+    $("#cap-count").textContent = `${cap.value.length} / 2200${tags ? ` · ${tags}/30 hashtags` : ""}`;
+    $("#cap-count").style.color = cap.value.length > 2200 || tags > 30 ? "var(--bad)" : "";
+    renderOverrides(false); renderPreview();
+  });
+  $("#vary").addEventListener("change", () => { $("#overrides").hidden = !$("#vary").checked; renderOverrides(true); });
+  function renderOverrides(fill) {
+    const box = $("#overrides");
+    if (!$("#vary").checked) return;
+    const ids = [...state.selected];
+    box.innerHTML = ids.length ? ids.map((id) => { const a = accById.get(id); return `<div class="field"><label>@${esc(a?.username || id)}</label><textarea data-ov="${id}" rows="3">${esc(state.overrides[id] ?? (fill ? cap.value : cap.value))}</textarea></div>`; }).join("") : `<p class="help">Selecione as contas para variar a legenda.</p>`;
+    box.querySelectorAll("textarea").forEach((t) => { if (!(t.dataset.ov in state.overrides)) state.overrides[t.dataset.ov] = t.value; t.addEventListener("input", () => { state.overrides[t.dataset.ov] = t.value; renderPreview(); }); });
+  }
+
+  // ------------------------------------------------------------- contas
+  function renderGroups() {
+    $("#group-chips").innerHTML = [`<button type="button" class="chip" data-g="all">Todas (${accounts.length})</button>`, ...groups.map((g) => `<button type="button" class="chip" data-g="${g.id}" title="${esc(g.name)}">${esc(g.name)} (${g.account_ids.filter((id) => accById.has(id)).length})</button>`), `<button type="button" class="chip" data-g="none">Limpar</button>`].join("");
+  }
+  $("#group-chips").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-g]"); if (!b) return;
+    const g = b.dataset.g;
+    if (g === "all") accounts.forEach((a) => state.selected.add(a.id));
+    else if (g === "none") state.selected.clear();
+    else { const grp = groups.find((x) => x.id === g); const ids = grp.account_ids.filter((id) => accById.has(id)); const allOn = ids.every((id) => state.selected.has(id)); ids.forEach((id) => allOn ? state.selected.delete(id) : state.selected.add(id)); }
+    renderAccounts();
+  });
+  function renderAccounts() {
+    $("#acct-pick").innerHTML = accounts.length ? accounts.map((a) => { const [label, kind] = accountHealth(a); return `
+      <label><input type="checkbox" data-acc="${a.id}" ${state.selected.has(a.id) ? "checked" : ""}>${avatar(a, 24)}<span class="name">${a.label ? esc(a.label) + " · " : ""}@${esc(a.username || "")}</span><span class="pill ${kind}">${esc(label)}</span></label>`; }).join("")
+      : `<div class="empty">Nenhuma conta conectada. <a href="../contas/">Conectar Instagram</a>.</div>`;
+    $("#acct-count").textContent = `${state.selected.size} de ${accounts.length} selecionada${state.selected.size === 1 ? "" : "s"}`;
+    $("#group-chips").querySelectorAll("[data-g]").forEach((c) => {
+      const g = c.dataset.g; if (g === "all") c.classList.toggle("on", accounts.length && state.selected.size === accounts.length); else if (g !== "none") { const grp = groups.find((x) => x.id === g); const ids = grp.account_ids.filter((id) => accById.has(id)); c.classList.toggle("on", ids.length > 0 && ids.every((id) => state.selected.has(id))); }
+    });
+    renderPreviewSelect(); renderOverrides(true); updateWhenHelp();
+  }
+  $("#acct-pick").addEventListener("change", (e) => { const cb = e.target.closest("[data-acc]"); if (!cb) return; cb.checked ? state.selected.add(cb.dataset.acc) : state.selected.delete(cb.dataset.acc); renderAccounts(); });
+  renderGroups(); renderAccounts();
+
+  // ------------------------------------------------------------- prévia
+  function renderPreviewSelect() {
+    const sel = $("#preview-acct"); const cur = sel.value;
+    sel.innerHTML = [...state.selected].map((id) => `<option value="${id}">@${esc(accById.get(id)?.username || id)}</option>`).join("") || `<option value="">(nenhuma conta)</option>`;
+    if ([...state.selected].includes(cur)) sel.value = cur;
+    renderPreview();
+  }
+  $("#preview-acct").addEventListener("change", renderPreview);
+  function renderPreview() {
+    const first = state.items[0];
+    const ph = $("#ph"); ph.className = `ph ${state.placement}`;
+    ph.innerHTML = first ? (first.kind === "video" ? `<video src="${first.previewUrl}" muted playsinline></video>` : `<img src="${first.previewUrl}" alt="">`) : "sem mídia";
+    const id = $("#preview-acct").value; const a = accById.get(id);
+    const text = ($("#vary").checked && state.overrides[id]) || cap.value;
+    $("#ph-cap").innerHTML = a ? `<b>${esc(a.username)}</b> ${esc(text)}` : esc(text);
+  }
+
+  // ------------------------------------------------------------- editar / duplicar
+  const editId = qs("id"), dupId = qs("dup");
+  if (editId || dupId) {
+    const { data: p } = await supa.from("posts").select("*").eq("id", editId || dupId).maybeSingle();
+    if (p) {
+      if (editId) {
+        if (!["scheduled", "draft"].includes(p.status)) { toast("Esta publicação já saiu; abrindo como cópia.", "info"); }
+        else { state.editId = p.id; $("#mode-label").textContent = "Editando publicação agendada"; $("#submit").textContent = "Salvar alterações"; }
+      } else $("#mode-label").textContent = "Cópia de publicação";
+      $("#title").value = p.title || ""; cap.value = p.caption || ""; cap.dispatchEvent(new Event("input"));
+      $("#placement").querySelector(`[data-v="${p.placement}"]`)?.click();
+      addFromLibrary((p.media || []).map((m) => ({ url: m.url, kind: m.kind, name: "mídia" })));
+      const { data: targets } = await supa.from("post_targets").select("account_id").eq("post_id", p.id);
+      (targets || []).forEach((t) => { if (accById.has(t.account_id)) state.selected.add(t.account_id); });
+      if (p.caption_overrides && Object.keys(p.caption_overrides).length) { state.overrides = { ...p.caption_overrides }; $("#vary").checked = true; $("#overrides").hidden = false; }
+      if (p.options?.share_to_feed === false) $("#share_to_feed").checked = false;
+      if (p.options?.collaborators?.length) $("#collaborators").value = p.options.collaborators.join(", ");
+      if (p.scheduled_at && new Date(p.scheduled_at) > new Date()) $("#scheduled_at").value = fmt.toLocalInput(p.scheduled_at);
+      renderAccounts();
+    }
+  }
+
+  // ------------------------------------------------------------- enviar
+  $("#form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msgs = $("#submit-msgs"); msgs.innerHTML = "";
+    const errors = validateMedia();
+    if (state.items.some((i) => !i.url && !i.error)) errors.push("Aguarde o upload terminar.");
+    if (state.items.some((i) => i.error)) errors.push("Remova as mídias com erro de upload.");
+    if (!cap.value.trim() && state.placement !== "stories") errors.push("Escreva uma legenda.");
+    if (!state.selected.size) errors.push("Escolha pelo menos uma conta.");
+    const scheduled_at = state.when === "now" ? null : fmt.fromLocalInput($("#scheduled_at").value);
+    if (state.when !== "now" && !scheduled_at) errors.push("Escolha data e hora.");
+    if (scheduled_at && new Date(scheduled_at) < new Date(Date.now() - 60000)) errors.push("A data e hora precisam estar no futuro.");
+    if (state.editId && state.when === "now") errors.push("Para publicar agora, cancele a agendada e crie uma nova.");
+    if (errors.length) { msgs.innerHTML = errors.map((m) => `<div class="error-box">${esc(m)}</div>`).join(""); return; }
+
+    const overrides = {};
+    if ($("#vary").checked) for (const id of state.selected) { const v = (state.overrides[id] || "").trim(); if (v && v !== cap.value.trim()) overrides[id] = v; }
+    const collaborators = $("#collaborators").value.split(",").map((s) => s.trim().replace(/^@/, "")).filter(Boolean).slice(0, 3);
+    const body = {
+      title: $("#title").value.trim() || null,
+      caption: cap.value.trim(),
+      placement: state.placement,
+      media: state.items.map((i) => ({ url: i.url, kind: i.kind })),
+      account_ids: [...state.selected],
+      scheduled_at,
+      caption_overrides: overrides,
+      options: { ...(state.placement === "reels" ? { share_to_feed: $("#share_to_feed").checked } : {}), ...(collaborators.length && state.placement !== "stories" ? { collaborators } : {}) },
+    };
+    const btn = $("#submit"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Enviando…`;
+    try {
+      const res = state.editId ? await api(`/posts/${state.editId}`, { method: "PUT", body }) : await api("/posts", { method: "POST", body });
+      toast(scheduled_at ? `Agendado para ${state.selected.size} conta${state.selected.size > 1 ? "s" : ""}.` : "Enviado para publicação.", "ok");
+      location.href = `../fila/?post=${res.id}`;
+    } catch (err) {
+      msgs.innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+      btn.disabled = false; btn.textContent = state.editId ? "Salvar alterações" : (state.when === "now" ? "Publicar agora" : "Agendar");
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Início · InstaFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/config.js"></script>
+</head>
+<body>
+<header class="top"></header>
+<main class="shell">
+  <div class="page-head">
+    <div><div class="eyebrow" id="today"></div><h1 class="h1">Início</h1></div>
+    <div class="actions"><a class="btn" href="criar/">+ Criar publicação</a></div>
+  </div>
+  <div class="stats" id="stats"><div class="stat"><b>…</b><span>carregando</span></div></div>
+  <div id="alerts" class="stack"></div>
+  <div class="grid c2">
+    <section class="card"><div class="split"><h2>Próximas publicações</h2><a class="small" href="calendario/">Calendário →</a></div><div class="list" id="next"></div></section>
+    <section class="card"><div class="split"><h2>Falhas para resolver</h2><a class="small" href="fila/?tab=failed">Ver todas →</a></div><div class="list" id="failed"></div></section>
+  </div>
+  <section class="card"><div class="split"><h2>Contas</h2><a class="small" href="contas/">Gerenciar →</a></div><div class="list" id="accounts"></div></section>
+</main>
+<script type="module">
+  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountName, accountHealth, postSummaryPill, PLACEMENT, toast } from "./assets/app.js";
+  const session = await requireAuth("./");
+  renderNav("inicio", "./", session.user.email);
+  document.getElementById("today").textContent = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Bahia", weekday: "long", day: "numeric", month: "long" }).format(new Date());
+
+  const nowIso = new Date().toISOString();
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const in7d = new Date(Date.now() + 7 * 86400000).toISOString();
+
+  // confere no Post for Me o que já deveria ter saído (em segundo plano)
+  api("/sync").then((r) => { if (r.checked) load(); }).catch(() => {});
+
+  async function load() {
+    const [{ data: next }, { data: failed }, { data: accounts }, { data: todayPosts }] = await Promise.all([
+      supa.from("post_overview").select("*").in("status", ["scheduled", "processing"]).order("scheduled_at", { ascending: true, nullsFirst: true }).limit(8),
+      supa.from("post_targets").select("post_id, account_id, error, updated_at, posts!inner(title, caption, scheduled_at), accounts!inner(username, label)").eq("status", "failed").gte("updated_at", new Date(Date.now() - 7 * 86400000).toISOString()).order("updated_at", { ascending: false }).limit(8),
+      supa.from("accounts").select("*").eq("archived", false).order("username"),
+      supa.from("post_overview").select("id, targets_total").gte("scheduled_at", dayStart.toISOString()).lt("scheduled_at", new Date(dayStart.getTime() + 86400000).toISOString()).neq("status", "canceled"),
+    ]);
+    const todayCount = (todayPosts || []).length;
+    const todayTargets = (todayPosts || []).reduce((s, p) => s + (p.targets_total || 0), 0);
+    const attention = (accounts || []).filter((a) => accountHealth(a)[1] !== "ok");
+    document.getElementById("stats").innerHTML = `
+      <div class="stat"><b class="num">${todayCount}</b><span>agendamentos hoje · ${todayTargets} posts</span></div>
+      <div class="stat ${failed?.length ? "bad" : ""}"><b class="num">${failed?.length || 0}</b><span>falhas nos últimos 7 dias</span></div>
+      <div class="stat ${attention.length ? "warn" : ""}"><b class="num">${(accounts || []).length}</b><span>contas · ${attention.length ? attention.length + " precisam de atenção" : "todas em dia"}</span></div>`;
+
+    const alerts = document.getElementById("alerts");
+    alerts.innerHTML = attention.slice(0, 3).map((a) => {
+      const [label, kind] = accountHealth(a);
+      return `<div class="${kind === "bad" ? "error-box" : "warn-box"} split"><span><b>@${esc(a.username)}</b> · ${esc(label)}</span><a class="btn small ghost" href="contas/">Resolver</a></div>`;
+    }).join("");
+    if (!(accounts || []).length) alerts.innerHTML = `<div class="warn-box split"><span>Nenhuma conta conectada ainda.</span><a class="btn small" href="contas/">Conectar Instagram</a></div>`;
+
+    document.getElementById("next").innerHTML = (next || []).length ? next.map((p) => `
+      <a class="row link" href="fila/?post=${p.id}" style="text-decoration:none;color:inherit">
+        <span class="chip time">${p.scheduled_at ? fmt.dateTimeLong(p.scheduled_at) : "agora"}</span>
+        <span><div class="title">${esc(p.title || p.caption.slice(0, 60) || "(sem título)")}</div><div class="sub">${PLACEMENT[p.placement]} · ${p.targets_total} contas</div></span>
+        ${postSummaryPill(p)}
+      </a>`).join("") : `<div class="empty">Nada agendado. <a href="criar/">Criar a primeira publicação</a>.</div>`;
+
+    document.getElementById("failed").innerHTML = (failed || []).length ? failed.map((t) => `
+      <a class="row link" href="fila/?post=${t.post_id}" style="text-decoration:none;color:inherit">
+        <span class="dot failed"></span>
+        <span><div class="title">@${esc(t.accounts.username)} · ${esc(t.posts.title || t.posts.caption.slice(0, 40))}</div><div class="sub">${esc(t.error || "Falhou")}</div></span>
+        <span class="muted small">${fmt.relative(t.updated_at)}</span>
+      </a>`).join("") : `<div class="empty">Nenhuma falha. 🎉</div>`;
+
+    const { data: usage } = await supa.from("account_usage_24h").select("*");
+    const usageMap = new Map((usage || []).map((u) => [u.account_id, u.published_24h]));
+    document.getElementById("accounts").innerHTML = (accounts || []).length ? accounts.map((a) => {
+      const [label, kind] = accountHealth(a);
+      const used = usageMap.get(a.id) || 0;
+      return `<div class="row">${avatar(a)}<span><div class="title">${accountName(a)}</div><div class="sub">${used} de 100 posts nas últimas 24 h</div></span><span class="pill ${kind}">${esc(label)}</span></div>`;
+    }).join("") : `<div class="empty">Nenhuma conta conectada.</div>`;
+  }
+  load().catch((e) => toast(e.message, "error"));
+</script>
+</body>
+</html>

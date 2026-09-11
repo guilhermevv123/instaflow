@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Config · InstaFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/config.js"></script>
+</head>
+<body>
+<header class="top"></header>
+<main class="shell">
+  <div class="page-head"><div><div class="eyebrow">Equipe, Post for Me e uso</div><h1 class="h1">Configurações</h1></div></div>
+  <div class="grid c2">
+    <section class="card">
+      <h2>Equipe</h2>
+      <p class="help">Quem pode entrar no painel. A pessoa cria a própria senha em "Primeiro acesso" na tela de login.</p>
+      <div class="list" id="team"></div>
+      <form class="inline" id="add-form" novalidate>
+        <input id="add-email" type="email" class="input" placeholder="email@exemplo.com" style="flex:1;min-width:180px" required>
+        <select id="add-role" class="input" style="width:auto"><option value="editor">Editor</option><option value="admin">Admin</option></select>
+        <button class="btn">Adicionar</button>
+      </form>
+    </section>
+    <section class="card">
+      <h2>Post for Me</h2>
+      <div id="pfm" class="stack"><span class="muted small">Carregando…</span></div>
+      <div class="inline"><button class="btn ghost small" id="test">Testar conexão</button><button class="btn ghost small" id="hook">Registrar/atualizar avisos (webhook)</button><button class="btn ghost small" id="syncall">Conferir publicações pendentes</button></div>
+    </section>
+    <section class="card">
+      <h2>Uso do mês</h2>
+      <div id="usage" class="stack"></div>
+      <p class="help">O plano do Post for Me conta 1 por conta publicada. O Instagram limita cada conta a 100 posts via API por 24 h.</p>
+    </section>
+    <section class="card">
+      <h2>Como funciona</h2>
+      <ul class="small muted" style="margin:0;padding-left:18px;display:grid;gap:4px">
+        <li>Horários sempre em <b>America/Bahia</b> (UTC−3).</li>
+        <li>O Post for Me publica em até 2 minutos após o horário e avisa aqui conta por conta.</li>
+        <li>Fotos são convertidas para JPEG e cortadas para 4:5–1.91:1 automaticamente.</li>
+        <li>Chaves das contas renovam sozinhas; se uma conta pedir "Reconectar", basta autorizar de novo.</li>
+      </ul>
+    </section>
+  </div>
+</main>
+<script type="module">
+  import { supa, requireAuth, api, renderNav, fmt, esc, toast, cfg } from "../assets/app.js";
+  const session = await requireAuth("../");
+  renderNav("config", "../", session.user.email);
+  const $ = (s) => document.querySelector(s);
+
+  async function loadTeam() {
+    const { data, error } = await supa.from("allowed_users").select("*").order("added_at");
+    if (error) { $("#team").innerHTML = `<div class="error-box">${esc(error.message)}</div>`; return; }
+    $("#team").innerHTML = (data || []).map((u) => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto auto"><span class="title">${esc(u.email)}</span><span class="pill ${u.role === "admin" ? "acc" : "neutral"}">${u.role}</span>${u.email.toLowerCase() === session.user.email.toLowerCase() ? `<span class="muted small">você</span>` : `<button class="btn danger small" data-rm="${esc(u.email)}">Remover</button>`}</div>`).join("");
+  }
+  $("#team").addEventListener("click", async (e) => { const b = e.target.closest("[data-rm]"); if (!b || !confirm(`Remover ${b.dataset.rm} da equipe?`)) return; const { error } = await supa.from("allowed_users").delete().eq("email", b.dataset.rm); if (error) toast(error.message, "error"); else { toast("Removido.", "ok"); loadTeam(); } });
+  $("#add-form").addEventListener("submit", async (e) => { e.preventDefault(); const email = $("#add-email").value.trim().toLowerCase(); if (!email) return; const { error } = await supa.from("allowed_users").insert({ email, role: $("#add-role").value }); if (error) toast(/policy|permission/i.test(error.message) ? "Só administradores adicionam pessoas." : error.message, "error"); else { toast("Adicionado.", "ok"); $("#add-email").value = ""; loadTeam(); } });
+
+  async function loadUsage() {
+    try {
+      const u = await api("/usage");
+      const pct = Math.min(100, Math.round((u.month_published / u.month_limit) * 100));
+      $("#usage").innerHTML = `<div class="split"><b class="num" style="font-size:1.4rem">${u.month_published} <span class="muted" style="font-size:.9rem">de ${u.month_limit} posts</span></b><span class="muted small">${pct}%</span></div><div class="bar ${pct >= 90 ? "bad" : pct >= 70 ? "warn" : ""}"><i style="width:${pct}%"></i></div>`;
+      $("#pfm").innerHTML = `
+        <div class="split"><span>Chave da API</span><span class="pill ok">configurada no Supabase</span></div>
+        <div class="split"><span>Avisos (webhook)</span>${u.webhook ? `<span class="pill ok">ativo</span>` : `<span class="pill warn">não registrado</span>`}</div>
+        ${u.webhook ? `<div class="muted small mono" style="word-break:break-all">${esc(u.webhook.url)}</div>` : `<p class="help">Clique em "Registrar avisos" para o Post for Me avisar quando publicar.</p>`}
+        <div class="split"><span>Último aviso recebido</span><span class="muted small">${u.last_event ? `${esc(u.last_event.event_type)} · ${fmt.dateTime(u.last_event.received_at)}` : "nenhum ainda"}</span></div>
+        <div class="split"><span>Projeto Supabase</span><span class="muted small mono">${esc(cfg.SUPABASE_URL.replace("https://", ""))}</span></div>`;
+    } catch (e) { $("#pfm").innerHTML = `<div class="error-box">${esc(e.message)}</div>`; }
+  }
+  $("#test").addEventListener("click", async () => { try { const r = await api("/health"); toast(`Conexão OK · ${r.accounts_total} conta(s) no Post for Me.`, "ok"); } catch (e) { toast(e.message, "error"); } });
+  $("#hook").addEventListener("click", async () => { try { const r = await api("/webhooks/setup", { method: "POST", body: {} }); toast(r.created ? "Webhook registrado." : "Webhook já estava ativo.", "ok"); loadUsage(); } catch (e) { toast(e.message, "error"); } });
+  $("#syncall").addEventListener("click", async () => { try { const r = await api("/sync", { method: "POST", body: {} }); toast(`${r.checked} publicação(ões) conferida(s).`, "ok"); } catch (e) { toast(e.message, "error"); } });
+  await Promise.all([loadTeam(), loadUsage()]);
+</script>
+</body>
+</html>

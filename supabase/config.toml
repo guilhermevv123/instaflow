@@ -1,0 +1,12 @@
+# Configuração mínima do CLI. NUNCA rodar `supabase config push` neste projeto:
+# ele sobrescreve a configuração de Auth do painel. Só usamos `db push` e
+# `functions deploy`, que leem daqui apenas o project_id e o verify_jwt.
+project_id = "instaflow"
+
+# As duas funções validam o acesso por conta própria (a `api` confere o JWT do
+# usuário chamando o Auth; a `pfm-webhook` confere o segredo do Post for Me).
+[functions.api]
+verify_jwt = false
+
+[functions.pfm-webhook]
+verify_jwt = false

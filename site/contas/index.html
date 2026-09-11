@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contas · InstaFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/config.js"></script>
+</head>
+<body>
+<header class="top"></header>
+<main class="shell">
+  <div class="page-head">
+    <div><div class="eyebrow">Instagram</div><h1 class="h1">Contas conectadas</h1></div>
+    <div class="actions"><button class="btn ghost" id="sync">Sincronizar</button><button class="btn" id="connect">+ Conectar Instagram</button></div>
+  </div>
+  <div id="notice"></div>
+  <div class="grid" style="grid-template-columns: minmax(0, 1.6fr) minmax(280px, .8fr)">
+    <section class="card">
+      <div class="split"><h2 id="count">Contas</h2><span class="muted small">A barra mostra os posts das últimas 24 h (limite do Instagram: 100)</span></div>
+      <div class="list" id="list"><div class="empty">Carregando…</div></div>
+    </section>
+    <div class="stack" style="gap:16px">
+      <section class="card">
+        <div class="split"><h2>Grupos</h2><button class="btn ghost small" id="new-group">+ Grupo</button></div>
+        <p class="help">Ex.: "Lojas SP", "Nordeste". Um clique seleciona o grupo inteiro na hora de criar.</p>
+        <div class="list" id="groups"></div>
+      </section>
+      <section class="card">
+        <h3>A conta precisa ser Profissional</h3>
+        <ol class="small muted" style="margin:0;padding-left:18px;display:grid;gap:4px">
+          <li>No app do Instagram: Perfil → ☰ → Configurações → Tipo de conta e ferramentas.</li>
+          <li>Toque em "Mudar para conta profissional" e escolha Empresa ou Criador.</li>
+          <li>Volte aqui e clique em "Conectar Instagram". Autorize na tela do Instagram.</li>
+        </ol>
+        <p class="help">A autorização passa pelo app "Post for Me", nosso parceiro de publicação. Nenhuma senha é guardada.</p>
+      </section>
+    </div>
+  </div>
+  <dialog class="modal" id="group-dlg"><form method="dialog" class="inner" id="group-form">
+    <div class="modal-head"><h2 id="group-title">Novo grupo</h2><button type="button" class="btn ghost small" id="group-close">Fechar</button></div>
+    <div class="field"><label for="group-name">Nome</label><input id="group-name" type="text" required maxlength="40"></div>
+    <div class="field"><span class="label">Contas</span><div class="acct-pick" id="group-accts"></div></div>
+    <div class="split"><button type="button" class="btn danger small" id="group-delete" hidden>Excluir grupo</button><button class="btn" id="group-save">Salvar</button></div>
+  </form></dialog>
+</main>
+<script type="module">
+  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountHealth, loadAccounts, loadGroups, toast, daysUntil } from "../assets/app.js";
+  const session = await requireAuth("../");
+  renderNav("contas", "../", session.user.email);
+  const $ = (s) => document.querySelector(s);
+  let accounts = [], groups = [], usage = new Map();
+
+  // Volta da autorização do Instagram (Post for Me manda estes parâmetros)
+  const params = new URLSearchParams(location.search);
+  if (params.has("isSuccess")) {
+    const ok = params.get("isSuccess") === "true";
+    const n = (params.get("accountIds") || "").split(",").filter(Boolean).length;
+    const err = params.get("error");
+    $("#notice").innerHTML = ok
+      ? `<div class="ok-box">Conta conectada${n > 1 ? "s" : ""} com sucesso${n ? ` (${n})` : ""}. Já dá para agendar.</div>`
+      : `<div class="error-box">Não foi possível conectar. ${esc((err || "").split("|").join(" · ")) || "Confira se a conta é Profissional e tente de novo."}</div>`;
+    history.replaceState({}, "", location.pathname);
+    if (ok) await syncNow(false);
+  }
+
+  $("#connect").addEventListener("click", async () => {
+    const b = $("#connect"); b.disabled = true;
+    try { const { url } = await api("/accounts/connect", { method: "POST", body: {} }); location.href = url; }
+    catch (e) { toast(e.message, "error"); b.disabled = false; }
+  });
+  $("#sync").addEventListener("click", () => syncNow(true));
+  async function syncNow(announce) {
+    const b = $("#sync"); b.disabled = true; b.innerHTML = `<span class="spinner"></span> Sincronizando…`;
+    try { const r = await api("/accounts/sync"); if (announce) toast(`${r.synced} conta${r.synced === 1 ? "" : "s"} sincronizada${r.synced === 1 ? "" : "s"}.`, "ok"); }
+    catch (e) { toast(e.message, "error"); }
+    finally { b.disabled = false; b.textContent = "Sincronizar"; await load(); }
+  }
+
+  async function load() {
+    [accounts, groups] = await Promise.all([loadAccounts({ includeArchived: false }), loadGroups()]);
+    const { data: u } = await supa.from("account_usage_24h").select("*");
+    usage = new Map((u || []).map((x) => [x.account_id, x.published_24h]));
+    $("#count").textContent = `${accounts.length} conta${accounts.length === 1 ? "" : "s"}`;
+    $("#list").innerHTML = accounts.length ? accounts.map((a) => {
+      const [label, kind] = accountHealth(a);
+      const used = usage.get(a.id) || 0;
+      const gs = groups.filter((g) => g.account_ids.includes(a.id)).map((g) => `<span class="chip" style="cursor:default">${esc(g.name)}</span>`).join(" ");
+      const d = daysUntil(a.access_token_expires_at);
+      return `<div class="row" style="grid-template-columns:auto minmax(0,1fr) auto">
+        ${avatar(a, 36)}
+        <span>
+          <div class="title">${a.label ? `${esc(a.label)} <span class="muted">· </span>` : ""}@${esc(a.username || a.id)} <button class="btn ghost small" data-label="${a.id}" title="Apelido">✎</button></div>
+          <div class="sub inline">${gs || '<span class="muted">sem grupo</span>'} · <span>${used} de 100 nas 24 h</span>${d !== null ? ` · <span title="Renovação automática da chave">chave até ${fmt.date(a.access_token_expires_at)}</span>` : ""}</div>
+          <div class="bar ${used >= 90 ? "bad" : used >= 60 ? "warn" : ""}" style="max-width:220px;margin-top:6px"><i style="width:${Math.min(100, used)}%"></i></div>
+        </span>
+        <span class="stack" style="justify-items:end">
+          <span class="pill ${kind}">${esc(label)}</span>
+          <span class="inline">${a.status !== "connected" ? `<button class="btn small" data-reconnect="${a.id}">Reconectar</button>` : `<button class="btn ghost small" data-disconnect="${a.id}">Desconectar</button>`}<button class="btn danger small" data-remove="${a.id}">Remover</button></span>
+        </span>
+      </div>`;
+    }).join("") : `<div class="empty">Nenhuma conta ainda. Clique em <b>Conectar Instagram</b>.</div>`;
+    $("#groups").innerHTML = groups.length ? groups.map((g) => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto"><span><div class="title">${esc(g.name)}</div><div class="sub">${g.account_ids.length} conta${g.account_ids.length === 1 ? "" : "s"}</div></span><button class="btn ghost small" data-edit-group="${g.id}">Editar</button></div>`).join("") : `<div class="empty small">Nenhum grupo.</div>`;
+  }
+
+  $("#list").addEventListener("click", async (e) => {
+    const t = e.target.closest("button"); if (!t) return;
+    try {
+      if (t.dataset.label) {
+        const a = accounts.find((x) => x.id === t.dataset.label);
+        const v = prompt(`Apelido para @${a.username} (vazio para remover):`, a.label || "");
+        if (v === null) return;
+        const { error } = await supa.from("accounts").update({ label: v.trim() || null }).eq("id", a.id); if (error) throw error;
+      } else if (t.dataset.reconnect) {
+        const { url } = await api("/accounts/connect", { method: "POST", body: {} }); location.href = url; return;
+      } else if (t.dataset.disconnect) {
+        if (!confirm("Desconectar esta conta? Publicações agendadas para ela vão falhar até reconectar.")) return;
+        await api(`/accounts/${t.dataset.disconnect}/disconnect`, { method: "POST", body: {} }); toast("Conta desconectada.", "ok");
+      } else if (t.dataset.remove) {
+        if (!confirm("Remover esta conta do painel? Se ela tiver histórico, fica arquivada.")) return;
+        const r = await api(`/accounts/${t.dataset.remove}`, { method: "DELETE" }); toast(r.archived ? "Conta arquivada." : "Conta removida.", "ok");
+      }
+      await load();
+    } catch (err) { toast(err.message, "error"); }
+  });
+
+  // grupos
+  const dlg = $("#group-dlg"); let editing = null;
+  function openGroup(g) {
+    editing = g;
+    $("#group-title").textContent = g ? "Editar grupo" : "Novo grupo";
+    $("#group-name").value = g?.name || "";
+    $("#group-delete").hidden = !g;
+    $("#group-accts").innerHTML = accounts.map((a) => `<label><input type="checkbox" value="${a.id}" ${g?.account_ids.includes(a.id) ? "checked" : ""}>${avatar(a, 24)}<span class="name">@${esc(a.username || a.id)}</span><span></span></label>`).join("") || `<div class="empty small">Conecte contas primeiro.</div>`;
+    dlg.showModal();
+  }
+  $("#new-group").addEventListener("click", () => openGroup(null));
+  $("#groups").addEventListener("click", (e) => { const b = e.target.closest("[data-edit-group]"); if (b) openGroup(groups.find((g) => g.id === b.dataset.editGroup)); });
+  $("#group-close").addEventListener("click", () => dlg.close());
+  $("#group-delete").addEventListener("click", async () => { if (!editing || !confirm("Excluir este grupo?")) return; await supa.from("account_groups").delete().eq("id", editing.id); dlg.close(); toast("Grupo excluído.", "ok"); await load(); });
+  $("#group-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("#group-name").value.trim(); if (!name) return;
+    const ids = [...$("#group-accts").querySelectorAll("input:checked")].map((i) => i.value);
+    try {
+      let gid = editing?.id;
+      if (gid) { const { error } = await supa.from("account_groups").update({ name }).eq("id", gid); if (error) throw error; }
+      else { const { data, error } = await supa.from("account_groups").insert({ name }).select("id").single(); if (error) throw error; gid = data.id; }
+      await supa.from("account_group_members").delete().eq("group_id", gid);
+      if (ids.length) { const { error } = await supa.from("account_group_members").insert(ids.map((account_id) => ({ group_id: gid, account_id }))); if (error) throw error; }
+      dlg.close(); toast("Grupo salvo.", "ok"); await load();
+    } catch (err) { toast(err.message, "error"); }
+  });
+
+  await load();
+  if (!params.has("isSuccess")) syncNow(false);
+</script>
+</body>
+</html>

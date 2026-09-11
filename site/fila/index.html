@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fila · InstaFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/config.js"></script>
+</head>
+<body>
+<header class="top"></header>
+<main class="shell">
+  <div class="page-head">
+    <div><div class="eyebrow">O que saiu, o que falhou e por quê</div><h1 class="h1">Fila e histórico</h1></div>
+    <div class="actions"><button class="btn ghost" id="refresh">Atualizar status</button><a class="btn" href="../criar/">+ Criar</a></div>
+  </div>
+  <div class="seg" id="tabs">
+    <button data-t="upcoming" class="on">Próximas</button><button data-t="running">Em andamento</button><button data-t="done">Concluídas</button><button data-t="failed">Com falhas</button><button data-t="canceled">Canceladas</button>
+  </div>
+  <section class="card"><div class="list" id="list"><div class="empty">Carregando…</div></div></section>
+
+  <dialog class="modal" id="dlg"><div class="inner" id="dlg-inner"></div></dialog>
+</main>
+<script type="module">
+  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, postSummaryPill, pill, TARGET_STATUS, PLACEMENT, toast, qs } from "../assets/app.js";
+  const session = await requireAuth("../");
+  renderNav("fila", "../", session.user.email);
+  const $ = (s) => document.querySelector(s);
+  let tab = qs("tab") || "upcoming", posts = [], accounts = new Map();
+
+  $("#tabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.t === tab));
+  $("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; tab = b.dataset.t; $("#tabs").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); render(); });
+  $("#refresh").addEventListener("click", () => refresh(true));
+
+  async function refresh(announce) {
+    const b = $("#refresh"); b.disabled = true; b.innerHTML = `<span class="spinner"></span> Conferindo…`;
+    try { const r = await api("/sync", { method: "POST", body: {} }); if (announce) toast(r.checked ? `${r.checked} publicação${r.checked > 1 ? "ões" : ""} conferida${r.checked > 1 ? "s" : ""}.` : "Nada pendente para conferir.", "ok"); }
+    catch (e) { toast(e.message, "error"); }
+    finally { b.disabled = false; b.textContent = "Atualizar status"; await load(); }
+  }
+
+  async function load() {
+    const [{ data, error }, { data: accs }] = await Promise.all([
+      supa.from("post_overview").select("*").order("scheduled_at", { ascending: false, nullsFirst: true }).order("created_at", { ascending: false }).limit(300),
+      supa.from("accounts").select("*"),
+    ]);
+    if (error) { toast(error.message, "error"); return; }
+    posts = data || []; accounts = new Map((accs || []).map((a) => [a.id, a]));
+    render();
+    if (qs("post")) openPost(qs("post"));
+  }
+
+  function filtered() {
+    const now = Date.now();
+    switch (tab) {
+      case "upcoming": return posts.filter((p) => ["scheduled", "draft"].includes(p.status)).sort((a, b) => new Date(a.scheduled_at || 0) - new Date(b.scheduled_at || 0));
+      case "running": return posts.filter((p) => p.status === "processing" || (p.status === "processed" && p.targets_pending > 0));
+      case "done": return posts.filter((p) => p.status === "processed" && p.targets_pending === 0 && p.targets_failed === 0);
+      case "failed": return posts.filter((p) => p.targets_failed > 0 || p.status === "error");
+      case "canceled": return posts.filter((p) => p.status === "canceled");
+    }
+    return posts;
+  }
+  function render() {
+    const list = filtered();
+    $("#list").innerHTML = list.length ? list.map((p) => `
+      <div class="row link" data-open="${p.id}">
+        <span class="chip time">${p.scheduled_at ? fmt.dateTimeLong(p.scheduled_at) : "imediato"}</span>
+        <span><div class="title">${esc(p.title || p.caption.slice(0, 70) || "(sem título)")}</div><div class="sub">${PLACEMENT[p.placement]} · ${p.targets_total} contas · criada ${fmt.relative(p.created_at)}</div></span>
+        ${postSummaryPill(p)}
+      </div>`).join("") : `<div class="empty">Nada por aqui.</div>`;
+  }
+  $("#list").addEventListener("click", (e) => { const r = e.target.closest("[data-open]"); if (r) openPost(r.dataset.open); });
+
+  const dlg = $("#dlg");
+  async function openPost(id) {
+    const p = posts.find((x) => x.id === id);
+    if (!p) { toast("Publicação não encontrada.", "error"); return; }
+    history.replaceState({}, "", `?post=${id}${tab !== "upcoming" ? `&tab=${tab}` : ""}`);
+    const { data: targets } = await supa.from("post_targets").select("*").eq("post_id", id).order("status");
+    const canEdit = ["scheduled", "draft"].includes(p.status);
+    const failed = (targets || []).filter((t) => t.status === "failed").length;
+    $("#dlg-inner").innerHTML = `
+      <div class="modal-head"><div><div class="eyebrow">${PLACEMENT[p.placement]} · ${p.scheduled_at ? fmt.dateTimeLong(p.scheduled_at) : "imediato"}</div><h2>${esc(p.title || "(sem título)")}</h2></div><button class="btn ghost small" id="dlg-close">Fechar</button></div>
+      <div class="split">${postSummaryPill(p)}<span class="muted small">id ${p.id.slice(0, 8)}</span></div>
+      <div class="thumbs">${(p.media || []).map((m) => `<div class="thumb">${m.kind === "video" ? `<video src="${esc(m.url)}" muted preload="metadata"></video>` : `<img src="${esc(m.url)}" alt="" loading="lazy">`}</div>`).join("")}</div>
+      <p style="white-space:pre-wrap;font-size:.92rem">${esc(p.caption)}</p>
+      <div class="list">${(targets || []).map((t) => { const a = accounts.get(t.account_id); return `
+        <div class="row">
+          <span class="dot ${t.status}"></span>
+          <span><div class="title">${avatar(a, 20)} @${esc(a?.username || t.account_id)}</div><div class="sub">${t.status === "published" ? `publicado ${fmt.dateTime(t.published_at)}` : t.status === "failed" ? esc(t.error || "Falhou") : (p.status === "scheduled" ? "aguardando o horário" : "publicando…")}</div></span>
+          ${t.permalink ? `<a class="btn ghost small" target="_blank" rel="noopener" href="${esc(t.permalink)}">ver post</a>` : pill(TARGET_STATUS, t.status)}
+        </div>`; }).join("") || `<div class="empty small">Sem contas.</div>`}</div>
+      <div class="inline">
+        <button class="btn ghost small" id="act-sync">Atualizar status</button>
+        ${failed ? `<button class="btn small" id="act-retry">Reenviar agora para as ${failed} que falharam</button>` : ""}
+        ${canEdit ? `<a class="btn ghost small" href="../criar/?id=${p.id}">Editar</a>` : ""}
+        <a class="btn ghost small" href="../criar/?dup=${p.id}">Duplicar</a>
+        ${canEdit ? `<button class="btn danger small" id="act-cancel">Cancelar agendamento</button>` : ""}
+      </div>`;
+    if (!dlg.open) dlg.showModal();
+    $("#dlg-close").onclick = () => { dlg.close(); history.replaceState({}, "", location.pathname + (tab !== "upcoming" ? `?tab=${tab}` : "")); };
+    $("#act-sync").onclick = async () => { try { const r = await api(`/posts/${id}/sync`, { method: "POST", body: {} }); toast(`Status: ${r.status} · ${r.results} resultado(s).`, "ok"); await load(); openPost(id); } catch (e) { toast(e.message, "error"); } };
+    $("#act-retry")?.addEventListener("click", async () => { if (!confirm(`Publicar agora nas ${failed} contas que falharam?`)) return; try { const r = await api(`/posts/${id}/retry`, { method: "POST", body: {} }); toast("Reenvio criado.", "ok"); await load(); openPost(r.id); } catch (e) { toast(e.message, "error"); } });
+    $("#act-cancel")?.addEventListener("click", async () => { if (!confirm("Cancelar este agendamento em todas as contas?")) return; try { await api(`/posts/${id}`, { method: "DELETE" }); toast("Agendamento cancelado.", "ok"); dlg.close(); await load(); } catch (e) { toast(e.message, "error"); } });
+  }
+  dlg.addEventListener("close", () => history.replaceState({}, "", location.pathname + (tab !== "upcoming" ? `?tab=${tab}` : "")));
+
+  await load();
+  // confere em segundo plano o que já deveria ter saído
+  api("/sync", { method: "POST", body: {} }).then((r) => { if (r.checked) load(); }).catch(() => {});
+</script>
+</body>
+</html>

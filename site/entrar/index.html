@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrar · InstaFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/config.js"></script>
+</head>
+<body>
+<main class="shell narrow">
+  <div class="login-logo"><span class="brand-mark">IF</span> InstaFlow</div>
+  <div class="card">
+    <div id="mode-title"><h1 class="h1">Entrar</h1><p class="muted">Use o e-mail cadastrado na equipe.</p></div>
+    <form id="form" class="stack" novalidate>
+      <div class="field"><label for="email">E-mail</label><input id="email" type="email" autocomplete="username" required></div>
+      <div class="field" id="pass-field"><label for="password">Senha</label><input id="password" type="password" autocomplete="current-password" minlength="8"></div>
+      <div id="msg" hidden></div>
+      <button class="btn block" id="submit" type="submit">Entrar</button>
+    </form>
+    <div class="inline small" id="links">
+      <a href="#" data-mode="signup">Primeiro acesso (criar senha)</a>
+      <span class="muted">·</span>
+      <a href="#" data-mode="forgot">Esqueci a senha</a>
+    </div>
+    <div class="inline small" id="back" hidden><a href="#" data-mode="signin">← Voltar para entrar</a></div>
+  </div>
+  <p class="muted small">Só e-mails autorizados pelo administrador conseguem usar o painel. Se você acabou de criar a senha e não entra, peça para o administrador adicionar seu e-mail em Config → Equipe.</p>
+</main>
+<script type="module">
+  import { supa, configured, toast, qs } from "../assets/app.js";
+  const $ = (s) => document.querySelector(s);
+  if (!configured) {
+    document.body.innerHTML = '<main class="shell narrow"><h1 class="h1">Falta configurar</h1><p class="muted">Preencha <code>assets/config.js</code> (rode <code>scripts/write-config.sh</code>).</p></main>';
+    throw new Error("não configurado");
+  }
+  let mode = "signin";
+  const next = qs("next") || "../";
+  const titles = {
+    signin: ["Entrar", "Use o e-mail cadastrado na equipe.", "Entrar"],
+    signup: ["Primeiro acesso", "Crie sua senha. Você recebe um e-mail para confirmar.", "Criar senha"],
+    forgot: ["Redefinir senha", "Enviamos um link para o seu e-mail.", "Enviar link"],
+    recovery: ["Nova senha", "Escolha a nova senha para a sua conta.", "Salvar nova senha"],
+  };
+  function setMode(m) {
+    mode = m;
+    const [h, p, btn] = titles[m];
+    $("#mode-title").innerHTML = `<h1 class="h1">${h}</h1><p class="muted">${p}</p>`;
+    $("#submit").textContent = btn;
+    $("#pass-field").hidden = m === "forgot";
+    $("#email").parentElement.hidden = m === "recovery";
+    $("#password").autocomplete = m === "signin" ? "current-password" : "new-password";
+    $("#links").hidden = m !== "signin";
+    $("#back").hidden = m === "signin" || m === "recovery";
+    $("#msg").hidden = true;
+  }
+  document.querySelectorAll("[data-mode]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); setMode(a.dataset.mode); }));
+  function say(text, kind = "error") { const m = $("#msg"); m.className = kind === "error" ? "error-box" : "ok-box"; m.textContent = text; m.hidden = false; }
+
+  // Sessão já ativa → segue. Link de recuperação → modo nova senha.
+  if (location.hash.includes("type=recovery")) setMode("recovery");
+  supa.auth.onAuthStateChange((event) => { if (event === "PASSWORD_RECOVERY") setMode("recovery"); });
+  const { data: s } = await supa.auth.getSession();
+  if (s.session && mode !== "recovery") { await afterLogin(); }
+
+  async function afterLogin() {
+    // Só membros conseguem ler allowed_users (RLS). Se vier vazio, avisa.
+    const { data, error } = await supa.from("allowed_users").select("email").limit(1);
+    if (error || !data?.length) {
+      await supa.auth.signOut();
+      say("Este e-mail ainda não tem acesso ao painel. Peça ao administrador para adicioná-lo em Config → Equipe.");
+      return;
+    }
+    location.replace(next);
+  }
+
+  $("#form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("#email").value.trim().toLowerCase();
+    const password = $("#password").value;
+    const btn = $("#submit");
+    btn.disabled = true;
+    try {
+      if (mode === "signin") {
+        const { error } = await supa.auth.signInWithPassword({ email, password });
+        if (error) throw new Error(traduz(error.message));
+        await afterLogin();
+      } else if (mode === "signup") {
+        if (password.length < 8) throw new Error("A senha precisa ter pelo menos 8 caracteres.");
+        const { data, error } = await supa.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
+        if (error) throw new Error(traduz(error.message));
+        if (data.session) await afterLogin();
+        else say("Conta criada. Abra o e-mail de confirmação e depois entre com a sua senha.", "ok");
+      } else if (mode === "forgot") {
+        const { error } = await supa.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+        if (error) throw new Error(traduz(error.message));
+        say("Se o e-mail existir, o link de redefinição chega em instantes.", "ok");
+      } else if (mode === "recovery") {
+        if (password.length < 8) throw new Error("A senha precisa ter pelo menos 8 caracteres.");
+        const { error } = await supa.auth.updateUser({ password });
+        if (error) throw new Error(traduz(error.message));
+        toast("Senha atualizada.", "ok");
+        await afterLogin();
+      }
+    } catch (err) {
+      say(err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function traduz(m = "") {
+    if (/invalid login credentials/i.test(m)) return "E-mail ou senha incorretos.";
+    if (/email not confirmed/i.test(m)) return "Confirme o e-mail antes de entrar (veja a caixa de entrada).";
+    if (/already registered/i.test(m)) return "Este e-mail já tem conta. Use 'Entrar' ou 'Esqueci a senha'.";
+    if (/rate limit/i.test(m)) return "Muitas tentativas. Aguarde um minuto.";
+    if (/password should be/i.test(m)) return "A senha precisa ter pelo menos 8 caracteres.";
+    return m;
+  }
+</script>
+</body>
+</html>

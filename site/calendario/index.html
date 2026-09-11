@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calendário · InstaFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/config.js"></script>
+</head>
+<body>
+<header class="top"></header>
+<main class="shell">
+  <div class="page-head">
+    <div><div class="eyebrow">Horário da Bahia</div><h1 class="h1">Calendário</h1></div>
+    <div class="actions">
+      <div class="seg"><button id="view-month" class="on">Mês</button><button id="view-list">Lista</button></div>
+      <a class="btn" href="../criar/">+ Criar</a>
+    </div>
+  </div>
+  <div class="cal-head">
+    <button class="btn ghost small" id="prev">‹ Anterior</button>
+    <h2 id="label"></h2>
+    <div class="inline"><button class="btn ghost small" id="today">Hoje</button><button class="btn ghost small" id="next">Próximo ›</button></div>
+  </div>
+  <div id="month"></div>
+  <div id="list" class="card" hidden></div>
+</main>
+<script type="module">
+  import { supa, requireAuth, renderNav, fmt, esc, postSummaryPill, PLACEMENT, toast } from "../assets/app.js";
+  const session = await requireAuth("../");
+  renderNav("calendario", "../", session.user.email);
+
+  let view = "month";
+  const bahiaNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bahia" }));
+  let year = bahiaNow.getFullYear(), month = bahiaNow.getMonth();
+  const todayKey = fmt.dayKey(new Date().toISOString());
+  const $ = (s) => document.querySelector(s);
+
+  $("#prev").onclick = () => { month--; if (month < 0) { month = 11; year--; } render(); };
+  $("#next").onclick = () => { month++; if (month > 11) { month = 0; year++; } render(); };
+  $("#today").onclick = () => { year = bahiaNow.getFullYear(); month = bahiaNow.getMonth(); render(); };
+  $("#view-month").onclick = () => setView("month");
+  $("#view-list").onclick = () => setView("list");
+  function setView(v) { view = v; $("#view-month").classList.toggle("on", v === "month"); $("#view-list").classList.toggle("on", v === "list"); render(); }
+
+  async function fetchPosts() {
+    // janela com folga: o mês em UTC-3 pode começar/terminar em outro dia UTC
+    const start = new Date(Date.UTC(year, month, 1) - 2 * 86400000).toISOString();
+    const end = new Date(Date.UTC(year, month + 1, 1) + 2 * 86400000).toISOString();
+    const { data, error } = await supa.from("post_overview").select("*").gte("scheduled_at", start).lt("scheduled_at", end).neq("status", "canceled").order("scheduled_at");
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function render() {
+    $("#label").textContent = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(year, month, 1)).replace(/^./, (c) => c.toUpperCase());
+    let posts = [];
+    try { posts = await fetchPosts(); } catch (e) { toast(e.message, "error"); }
+    const byDay = new Map();
+    for (const p of posts) {
+      const k = fmt.dayKey(p.scheduled_at);
+      if (!byDay.has(k)) byDay.set(k, []);
+      byDay.get(k).push(p);
+    }
+    $("#month").hidden = view !== "month";
+    $("#list").hidden = view !== "list";
+    if (view === "list") return renderList(posts);
+
+    const first = new Date(year, month, 1);
+    const startDow = (first.getDay() + 6) % 7; // segunda = 0
+    const days = new Date(year, month + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < startDow; i++) cells.push(null);
+    for (let d = 1; d <= days; d++) cells.push(d);
+    while (cells.length % 7) cells.push(null);
+    const hd = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"].map((h) => `<div class="hd">${h}</div>`).join("");
+    $("#month").innerHTML = `<div class="cal">${hd}${cells.map((d) => {
+      if (!d) return `<div class="d out"></div>`;
+      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const items = byDay.get(key) || [];
+      const shown = items.slice(0, 3);
+      return `<div class="d ${key === todayKey ? "today" : ""}"><span class="n">${d}</span>
+        ${shown.map((p) => `<a class="ev ${p.placement} ${p.status === "processed" ? "done" : ""} ${p.targets_failed ? "bad" : ""}" href="../fila/?post=${p.id}" title="${esc(p.title || p.caption)}">${fmt.time(p.scheduled_at)} · ${esc(p.title || p.caption.slice(0, 18))} · ${p.targets_total}</a>`).join("")}
+        ${items.length > 3 ? `<span class="more">+${items.length - 3}</span>` : ""}
+      </div>`;
+    }).join("")}</div>`;
+  }
+
+  function renderList(posts) {
+    $("#list").innerHTML = posts.length ? `<div class="list">${posts.map((p) => `
+      <a class="row link" href="../fila/?post=${p.id}" style="text-decoration:none;color:inherit">
+        <span class="chip time">${fmt.dateTimeLong(p.scheduled_at)}</span>
+        <span><div class="title">${esc(p.title || p.caption.slice(0, 70))}</div><div class="sub">${PLACEMENT[p.placement]} · ${p.targets_total} contas</div></span>
+        ${postSummaryPill(p)}
+      </a>`).join("")}</div>` : `<div class="empty">Nada agendado neste mês.</div>`;
+  }
+  render();
+</script>
+</body>
+</html>

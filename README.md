@@ -51,8 +51,8 @@ Depois: entre com o e-mail admin ("Primeiro acesso" cria a senha; se o e-mail j�
 
 ## Onde está ligado hoje (10/09/2026)
 
-- **Supabase:** projeto `zxaiearxsuulhkfyybke` (us-east-2), o mesmo do app Meu Auxiliar. As tabelas do InstaFlow convivem em `public` sem colisão de nomes; secrets com prefixo (`INSTAFLOW_ALLOWED_ORIGINS`, `POSTFORME_API_KEY`).
-- Esse projeto está em outra conta, então o `supabase link` não funciona por aqui. Deploy sem link:
+- **Supabase:** projeto exclusivo `bcopmfxhfsyfwaajnnfm` (us-west-2, conta guilhermevv123). Secrets: `POSTFORME_API_KEY`, `INSTAFLOW_ALLOWED_ORIGINS`. Auth: `mailer_autoconfirm=true` (cadastro entra direto, sem e-mail), `site_url` = painel.
+- O projeto está em outra conta Supabase, então o `supabase link` deste Mac não funciona. Deploy sem link:
   ```bash
   set -a; . ~/.config/instaflow/supabase.env; set +a   # SUPABASE_ACCESS_TOKEN e SUPABASE_PROJECT_REF
   supabase functions deploy api --project-ref $SUPABASE_PROJECT_REF --no-verify-jwt --use-api
@@ -60,8 +60,8 @@ Depois: entre com o e-mail admin ("Primeiro acesso" cria a senha; se o e-mail j�
   ```
   SQL: Management API `POST /v1/projects/<ref>/database/query` (ver histórico em `supabase_migrations.schema_migrations`).
 - **Site:** https://guilhermevv123.github.io/instaflow/ (repo público `guilhermevv123/instaflow`, Pages em `/docs`).
-- **Post for Me:** webhook `wbh_12qyxP1lGGAuLCWogv0I` → `…/functions/v1/pfm-webhook` (segredo em `app_settings.pfm_webhook`). Auth callback URL do projeto deve ser `https://guilhermevv123.github.io/instaflow/contas/`.
-- **Auth:** cadastro auto-confirmado; `uri_allow_list` inclui `https://guilhermevv123.github.io/instaflow/**`.
+- **Post for Me:** webhook → `https://bcopmfxhfsyfwaajnnfm.supabase.co/functions/v1/pfm-webhook` (id e segredo em `app_settings.pfm_webhook`). Auth callback URL do projeto deve ser `https://guilhermevv123.github.io/instaflow/contas/`.
+- **Auth:** `uri_allow_list` inclui o painel e `http://localhost:8765/**` (servidor local: `.claude/launch.json` → `instaflow-local`).
 
 ## Segurança
 

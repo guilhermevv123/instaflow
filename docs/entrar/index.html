@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Entrar · InstaFlow</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/login.css">
 <script src="../assets/config.js"></script>
   <link rel="icon" type="image/svg+xml" href="../assets/brand/instaflow-icon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="../assets/brand/favicon-32.png">
@@ -14,54 +15,224 @@
   <meta name="theme-color" content="#FF6A00">
 </head>
 <body>
-<main class="shell narrow">
-  <div class="login-logo"><img class="brand-logo" src="../assets/brand/instaflow-logo.svg" alt="InstaFlow"></div>
-  <div class="card">
-    <div id="mode-title"><h1 class="h1">Entrar</h1><p class="muted">Use o e-mail cadastrado na equipe.</p></div>
-    <form id="form" class="stack" novalidate>
-      <div class="field"><label for="email">E-mail</label><input id="email" type="email" autocomplete="username" required></div>
-      <div class="field" id="pass-field"><label for="password">Senha</label><input id="password" type="password" autocomplete="current-password" minlength="8"></div>
-      <div id="msg" hidden></div>
-      <button class="btn block" id="submit" type="submit">Entrar</button>
-    </form>
-    <div class="inline small" id="links">
-      <a href="#" data-mode="signup">Primeiro acesso (criar senha)</a>
-      <span class="muted">·</span>
-      <a href="#" data-mode="forgot">Esqueci a senha</a>
+<div class="auth">
+
+  <!-- ══════════ Painel da marca ══════════ -->
+  <section class="hero anim-x" style="--d: 60ms" aria-label="InstaFlow">
+    <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="hero-top">
+      <img class="hero-logo" src="../assets/brand/instaflow-logo.svg" alt="InstaFlow">
+      <span class="badge"><b></b>Publicação em massa</span>
     </div>
-    <div class="inline small" id="back" hidden><a href="#" data-mode="signin">← Voltar para entrar</a></div>
-  </div>
-  <p class="muted small">Só e-mails autorizados pelo administrador conseguem usar o painel. Se você acabou de criar a senha e não entra, peça para o administrador adicionar seu e-mail em Config → Equipe.</p>
-</main>
+
+    <div class="hero-copy">
+      <h1 class="anim" style="--d: 260ms">Um post.<span class="grad">Todos os seus perfis.</span></h1>
+      <p class="lead anim" style="--d: 380ms">Agende uma vez e o InstaFlow publica no Feed, nos Reels e nos Stories de todas as contas na hora marcada, pela <strong>API oficial do Instagram</strong>.</p>
+    </div>
+
+    <div class="stage anim" style="--d: 520ms" aria-hidden="true">
+      <div class="orbit" id="orbit">
+        <svg class="links" viewBox="0 0 460 360" preserveAspectRatio="none"></svg>
+        <div class="post-card">
+          <div class="pc-img"><span>Promo<br>de sexta</span></div>
+          <div class="pc-meta"><span class="pc-time">sex · 19:00</span><span class="pc-type">Reels</span></div>
+          <i class="pc-line"></i><i class="pc-line short"></i>
+        </div>
+      </div>
+      <div class="live-count"><b class="lc-dot"></b>Publicando agora · <strong id="lc">0</strong> de 12 perfis</div>
+    </div>
+
+    <div class="hero-cards">
+      <div class="gcard anim" style="--d: 900ms">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div><b>API oficial</b><span>Conexão pelo próprio Instagram, sem senha de ninguém.</span></div>
+      </div>
+      <div class="gcard anim" style="--d: 1040ms">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        <div><b>Feed, Reels e Stories</b><span>Tudo no mesmo agendamento.</span></div>
+      </div>
+      <div class="gcard anim" style="--d: 1180ms">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <div><b>Status por conta</b><span>Veja o que saiu em cada perfil.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Formulário ══════════ -->
+  <section class="panel">
+    <div class="form-wrap" id="form-wrap">
+      <div class="anim" style="--d: 200ms">
+        <div id="mode-title"><h1 class="login-title">Bem-vindo <em>de volta</em></h1><p class="login-sub">Entre para agendar e acompanhar as suas publicações.</p></div>
+      </div>
+
+      <form id="form" class="login-form" novalidate>
+        <div class="anim" style="--d: 320ms">
+          <div class="lfield" id="email-field">
+            <label for="email">E-mail</label>
+            <div class="input-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              <input id="email" type="email" autocomplete="username" placeholder="voce@empresa.com" required>
+            </div>
+          </div>
+        </div>
+        <div class="anim" style="--d: 420ms">
+          <div class="lfield" id="pass-field">
+            <label for="password">Senha</label>
+            <div class="input-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <input id="password" type="password" autocomplete="current-password" placeholder="Sua senha" minlength="8">
+              <button type="button" class="eye" id="eye" aria-label="Mostrar senha" aria-pressed="false"></button>
+            </div>
+          </div>
+        </div>
+        <div id="msg" role="alert" hidden></div>
+        <div class="anim" style="--d: 520ms">
+          <button class="login-btn" id="submit" type="submit">
+            <span class="spin" aria-hidden="true"></span>
+            <span class="lbl">Entrar no InstaFlow</span>
+            <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+        </div>
+      </form>
+
+      <div class="anim" style="--d: 600ms">
+        <div class="login-links" id="links">
+          <a href="#" data-mode="signup">Primeiro acesso (criar senha)</a>
+          <a href="#" data-mode="forgot">Esqueci a senha</a>
+        </div>
+        <div class="login-links" id="back" hidden><a href="#" data-mode="signin">← Voltar para entrar</a></div>
+      </div>
+
+      <p class="login-foot anim" style="--d: 700ms">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Só e-mails autorizados pelo administrador
+      </p>
+    </div>
+  </section>
+</div>
+
 <script type="module">
   import { supa, configured, toast, qs } from "../assets/app.js";
   const $ = (s) => document.querySelector(s);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ── Cena do painel da marca: 1 post → 12 perfis (em loop de 6 s) ──
+  (() => {
+    const orbit = $("#orbit");
+    if (!orbit) return;
+    const W = 460, H = 360, cx = W / 2, cy = H / 2, N = 12, rx = 200, ry = 150, CYCLE = 6000;
+    const letters = ["P", "L", "B", "C", "O", "S", "M", "A", "F", "D", "T", "G"]; // contas de exemplo
+    const check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    const links = orbit.querySelector("svg.links");
+    const delays = [];
+    for (let i = 0; i < N; i++) {
+      const a = -Math.PI / 2 + i * (2 * Math.PI / N);
+      const x = cx + rx * Math.cos(a), y = cy + ry * Math.sin(a);
+      const d = 400 + i * 180;
+      delays.push(d);
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", cx); line.setAttribute("y1", cy);
+      line.setAttribute("x2", x.toFixed(1)); line.setAttribute("y2", y.toFixed(1));
+      links.appendChild(line);
+      const node = document.createElement("div");
+      node.className = "av-node";
+      node.style.cssText = `left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;--d:${d}ms`;
+      node.innerHTML = `${letters[i]}<span class="ok">${check}</span>`;
+      orbit.appendChild(node);
+      const spark = document.createElement("i");
+      spark.className = "spark";
+      spark.style.cssText = `--d:${d}ms;--x0:${(cx + (x - cx) * .42).toFixed(1)}px;--y0:${(cy + (y - cy) * .42).toFixed(1)}px;--x1:${(x - (x - cx) * .12).toFixed(1)}px;--y1:${(y - (y - cy) * .12).toFixed(1)}px`;
+      orbit.appendChild(spark);
+    }
+    // contador "N de 12" acompanhando as chegadas
+    const lc = $("#lc"), t0 = performance.now();
+    const tick = () => {
+      if (reduce) { lc.textContent = N; return; }
+      const t = performance.now() - t0;
+      let n = 0;
+      for (const d of delays) { const lt = t - d; if (lt >= 0) { const ph = lt % CYCLE; if (ph >= 840 && ph < 5700) n++; } }
+      lc.textContent = n;
+    };
+    tick();
+    if (!reduce) setInterval(tick, 120);
+    // cabe no espaço disponível
+    const stage = orbit.parentElement;
+    const fit = () => orbit.style.setProperty("--s", Math.max(.55, Math.min(1, stage.clientWidth / 500, (stage.clientHeight - 46) / 390)).toFixed(3));
+    new ResizeObserver(fit).observe(stage);
+    fit();
+    // leve inclinação acompanhando o mouse
+    if (!reduce) {
+      const hero = document.querySelector(".hero");
+      hero.addEventListener("pointermove", (e) => {
+        const r = hero.getBoundingClientRect();
+        orbit.style.setProperty("--ry", `${(((e.clientX - r.left) / r.width - .5) * 10).toFixed(2)}deg`);
+        orbit.style.setProperty("--rx", `${(((e.clientY - r.top) / r.height - .5) * -8).toFixed(2)}deg`);
+      });
+      hero.addEventListener("pointerleave", () => { orbit.style.setProperty("--ry", "0deg"); orbit.style.setProperty("--rx", "0deg"); });
+    }
+  })();
+
+  // ── Mostrar/ocultar senha ──
+  const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  $("#eye").innerHTML = EYE;
+  $("#eye").addEventListener("click", () => {
+    const p = $("#password"), show = p.type === "password";
+    p.type = show ? "text" : "password";
+    $("#eye").innerHTML = show ? EYE_OFF : EYE;
+    $("#eye").setAttribute("aria-pressed", String(show));
+    $("#eye").setAttribute("aria-label", show ? "Ocultar senha" : "Mostrar senha");
+  });
+
   if (!configured) {
     document.body.innerHTML = '<main class="shell narrow"><h1 class="h1">Falta configurar</h1><p class="muted">Preencha <code>assets/config.js</code> (rode <code>scripts/write-config.sh</code>).</p></main>';
     throw new Error("não configurado");
   }
+
   let mode = "signin";
+  let navigating = false;
   const next = qs("next") || "../";
   const titles = {
-    signin: ["Entrar", "Use o e-mail cadastrado na equipe.", "Entrar"],
-    signup: ["Primeiro acesso", "Crie sua senha e entre. Só e-mails autorizados pelo administrador conseguem usar o painel.", "Criar senha e entrar"],
-    forgot: ["Redefinir senha", "Enviamos um link para o seu e-mail.", "Enviar link"],
-    recovery: ["Nova senha", "Escolha a nova senha para a sua conta.", "Salvar nova senha"],
+    signin: ["Bem-vindo <em>de volta</em>", "Entre para agendar e acompanhar as suas publicações.", "Entrar no InstaFlow", "Entrando…"],
+    signup: ["Primeiro <em>acesso</em>", "Crie sua senha e entre. Só e-mails autorizados pelo administrador conseguem usar o painel.", "Criar senha e entrar", "Criando…"],
+    forgot: ["Redefinir <em>senha</em>", "Enviamos um link para o seu e-mail.", "Enviar link", "Enviando…"],
+    recovery: ["Nova <em>senha</em>", "Escolha a nova senha para a sua conta.", "Salvar nova senha", "Salvando…"],
   };
   function setMode(m) {
     mode = m;
     const [h, p, btn] = titles[m];
-    $("#mode-title").innerHTML = `<h1 class="h1">${h}</h1><p class="muted">${p}</p>`;
-    $("#submit").textContent = btn;
+    const t = $("#mode-title");
+    t.innerHTML = `<h1 class="login-title">${h}</h1><p class="login-sub">${p}</p>`;
+    t.classList.remove("swap"); void t.offsetWidth; t.classList.add("swap");
+    $("#submit .lbl").textContent = btn;
     $("#pass-field").hidden = m === "forgot";
-    $("#email").parentElement.hidden = m === "recovery";
+    $("#email-field").hidden = m === "recovery";
     $("#password").autocomplete = m === "signin" ? "current-password" : "new-password";
     $("#links").hidden = m !== "signin";
     $("#back").hidden = m === "signin" || m === "recovery";
     $("#msg").hidden = true;
   }
   document.querySelectorAll("[data-mode]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); setMode(a.dataset.mode); }));
-  function say(text, kind = "error") { const m = $("#msg"); m.className = kind === "error" ? "error-box" : "ok-box"; m.textContent = text; m.hidden = false; }
+  function say(text, kind = "error") { const m = $("#msg"); m.className = `login-msg ${kind === "error" ? "error" : "ok"}`; m.textContent = text; m.hidden = false; }
+  function shake() { const w = $("#form-wrap"); w.classList.remove("shake"); void w.offsetWidth; w.classList.add("shake"); }
+
+  // Botão vira "Tudo certo!" e uma onda laranja cobre a tela antes de abrir o painel.
+  async function celebrate() {
+    const btn = $("#submit");
+    btn.classList.remove("loading");
+    btn.classList.add("done");
+    $("#submit .lbl").textContent = "Tudo certo!";
+    if (reduce) return;
+    const r = btn.getBoundingClientRect();
+    const w = document.createElement("div");
+    w.className = "warp";
+    w.style.setProperty("--wx", `${r.left + r.width / 2}px`);
+    w.style.setProperty("--wy", `${r.top + r.height / 2}px`);
+    document.body.appendChild(w);
+    await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+    w.classList.add("go");
+    await new Promise((ok) => setTimeout(ok, 720));
+  }
 
   // Voltou da autorização do Instagram sem sessão neste endereço? Avisa que deu certo.
   if (/isSuccess=true/.test(decodeURIComponent(next))) say("Instagram conectado com sucesso. Entre para ver a conta em Contas.", "ok");
@@ -72,14 +243,17 @@
   const { data: s } = await supa.auth.getSession();
   if (s.session && mode !== "recovery") { await afterLogin(); }
 
-  async function afterLogin() {
+  async function afterLogin({ animate = false } = {}) {
     // Só membros conseguem ler allowed_users (RLS). Se vier vazio, avisa.
     const { data, error } = await supa.from("allowed_users").select("email").limit(1);
     if (error || !data?.length) {
       await supa.auth.signOut();
       say("Este e-mail ainda não tem acesso ao painel. Peça ao administrador para adicioná-lo em Config → Equipe.");
+      shake();
       return;
     }
+    navigating = true;
+    if (animate) await celebrate();
     location.replace(next);
   }
 
@@ -89,11 +263,14 @@
     const password = $("#password").value;
     const btn = $("#submit");
     btn.disabled = true;
+    btn.classList.add("loading");
+    $("#submit .lbl").textContent = titles[mode][3];
+    $("#msg").hidden = true;
     try {
       if (mode === "signin") {
         const { error } = await supa.auth.signInWithPassword({ email, password });
         if (error) throw new Error(traduz(error.message));
-        await afterLogin();
+        await afterLogin({ animate: true });
       } else if (mode === "signup") {
         if (password.length < 8) throw new Error("A senha precisa ter pelo menos 8 caracteres.");
         const { data, error } = await supa.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
@@ -101,12 +278,12 @@
           // E-mail já cadastrado: tenta entrar com a senha digitada antes de reclamar.
           if (/already registered/i.test(error.message)) {
             const tryIn = await supa.auth.signInWithPassword({ email, password });
-            if (!tryIn.error) { await afterLogin(); return; }
+            if (!tryIn.error) { await afterLogin({ animate: true }); return; }
             throw new Error("Este e-mail já tem conta e a senha não bate. Use 'Entrar' com a senha certa ou 'Esqueci a senha'.");
           }
           throw new Error(traduz(error.message));
         }
-        if (data.session) await afterLogin();
+        if (data.session) await afterLogin({ animate: true });
         else say("Conta criada. Agora clique em Entrar com o seu e-mail e a senha que você acabou de criar.", "ok");
       } else if (mode === "forgot") {
         const { error } = await supa.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
@@ -117,12 +294,17 @@
         const { error } = await supa.auth.updateUser({ password });
         if (error) throw new Error(traduz(error.message));
         toast("Senha atualizada.", "ok");
-        await afterLogin();
+        await afterLogin({ animate: true });
       }
     } catch (err) {
       say(err.message);
+      shake();
     } finally {
-      btn.disabled = false;
+      if (!navigating) {
+        btn.disabled = false;
+        btn.classList.remove("loading");
+        $("#submit .lbl").textContent = titles[mode][2];
+      }
     }
   });
 

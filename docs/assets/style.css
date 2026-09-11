@@ -1,7 +1,8 @@
 /* InstaFlow · estilos do painel */
 :root {
   --bg: #F2F3F6; --surface: #FFFFFF; --surface-2: #E9EBF0; --ink: #14161B; --ink-2: #394050; --muted: #5F6676; --line: #D6D9E1;
-  --accent: #A92C63; --accent-ink: #FFFFFF; --accent-soft: #F6E1EB;
+  --accent: #C2410C; --accent-ink: #1A0D05; --accent-soft: #FFEADB;
+  --brand-grad: linear-gradient(135deg, #FF4500 0%, #FF8A00 55%, #FFBE1A 100%);
   --time: #94580A; --time-soft: #FAEBD3;
   --ok: #1D7F47; --ok-soft: #DBF1E3; --warn: #9A6212; --warn-soft: #FBEDD2; --bad: #B9362C; --bad-soft: #FADFDB;
   --shadow: 0 1px 2px rgba(20,22,27,.05), 0 10px 30px rgba(20,22,27,.07);
@@ -13,7 +14,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #101116; --surface: #191B22; --surface-2: #22252E; --ink: #ECEDF2; --ink-2: #C6CAD4; --muted: #969BA9; --line: #2D313B;
-    --accent: #EE6A9F; --accent-ink: #1B0A12; --accent-soft: #3A1828;
+    --accent: #FF8A3D; --accent-ink: #1A0D05; --accent-soft: #3A1D0C;
     --time: #F0B252; --time-soft: #372911;
     --ok: #52C685; --ok-soft: #133022; --warn: #E9B458; --warn-soft: #382C13; --bad: #F2776C; --bad-soft: #3C1A17;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
@@ -44,7 +45,7 @@ p { margin: 0; }
 /* shell */
 header.top { display: flex; align-items: center; gap: 18px; padding: 10px 22px; border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 20; }
 .brand { display: inline-flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 800; color: var(--ink); text-decoration: none; letter-spacing: -.01em; }
-.brand-mark { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--accent); color: var(--accent-ink); font-size: .72rem; }
+.brand-logo { display: block; height: 30px; width: auto; }
 .tabs { display: flex; gap: 2px; overflow-x: auto; flex: 1; }
 .tabs a { padding: 6px 11px; border-radius: 8px; color: var(--ink-2); text-decoration: none; white-space: nowrap; font-weight: 500; }
 .tabs a:hover { background: var(--surface-2); color: var(--ink); }
@@ -100,7 +101,7 @@ header.top { display: flex; align-items: center; gap: 18px; padding: 10px 22px; 
 .av { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--surface-2); color: var(--ink-2); font-size: .72rem; font-weight: 700; object-fit: cover; flex: none; }
 
 /* buttons */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: 9px; border: 1px solid transparent; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: .9rem; cursor: pointer; text-decoration: none; line-height: 1.2; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: 9px; border: 1px solid transparent; background: var(--brand-grad); color: var(--accent-ink); font-weight: 700; font-size: .9rem; cursor: pointer; text-decoration: none; line-height: 1.2; }
 .btn:hover { filter: brightness(1.05); }
 .btn:disabled { opacity: .55; cursor: not-allowed; }
 .btn.ghost { background: transparent; color: var(--ink-2); border-color: var(--line); }
@@ -135,7 +136,7 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 
 /* progress bars */
 .bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+.bar i { display: block; height: 100%; background: var(--brand-grad); transition: width .2s; }
 .bar.warn i { background: var(--warn); }
 .bar.bad i { background: var(--bad); }
 
@@ -203,6 +204,6 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 .inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .divider { height: 1px; background: var(--line); }
 .login-logo { display: inline-flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 800; font-size: 1.4rem; }
-.login-logo .brand-mark { width: 34px; height: 34px; font-size: .9rem; border-radius: 9px; }
+.login-logo .brand-logo { height: 64px; }
 .spinner { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; }
 @keyframes spin { to { transform: rotate(360deg); } }

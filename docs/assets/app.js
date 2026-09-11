@@ -152,7 +152,7 @@ export function renderNav(active, rootRel, email) {
   const nav = document.querySelector("header.top");
   if (!nav) return;
   nav.innerHTML = `
-    <a class="brand" href="${rootRel}"><span class="brand-mark">IF</span> InstaFlow</a>
+    <a class="brand" href="${rootRel}" aria-label="InstaFlow, início"><img class="brand-logo" src="${rootRel}assets/brand/instaflow-logo.svg" alt="InstaFlow"></a>
     <nav class="tabs" aria-label="Seções">
       ${items.map(([k, label, href]) => `<a href="${rootRel}${href}" class="${k === active ? "on" : ""}" ${k === active ? 'aria-current="page"' : ""}>${label}</a>`).join("")}
     </nav>

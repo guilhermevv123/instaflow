@@ -36,8 +36,9 @@
           <div id="media-msgs" class="stack"></div>
         </div>
         <div class="field"><label for="caption">Legenda</label><textarea id="caption" maxlength="2200" placeholder="Escreva a legenda. #hashtags e @menções valem."></textarea>
-          <div class="split"><span class="help" id="cap-count">0 / 2200</span><label class="check small"><input type="checkbox" id="vary"> Variar a legenda por conta</label></div>
+          <div class="split"><span class="help" id="cap-count">0 / 2200</span><span class="inline"><label class="check small"><input type="checkbox" id="vary"> Variar a legenda por conta</label><button type="button" class="btn ghost small accent" id="gen-vary" disabled title="Escolha 2 ou mais contas para variar a legenda">✨ Criar variações</button></span></div>
         </div>
+        <div id="vary-status" class="stack" hidden aria-live="polite"></div>
         <div id="overrides" class="stack" hidden></div>
         <div class="net-card" id="ig-opts" hidden>
           <h3 id="ig-opts-h">Instagram</h3>
@@ -95,11 +96,12 @@
   import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountHealth, loadAccounts, loadGroups, toast, qs, defaultScheduleValue, PLACEMENT, pageReady, PLATFORMS, platformIcon, platformName, handle } from "../assets/app.js";
   import { kindOf, probe, validateSet, uploadFile } from "../assets/media.js";
   import { openCropper, fitsPlacement, suggestRatio, ratiosFor } from "../assets/cropper.js";
+  import { variarLegenda } from "../assets/variar.js";
   renderNav("criar", "../");
   const session = await requireAuth("../");
   const $ = (s) => document.querySelector(s);
 
-  const state = { placement: "timeline", when: "schedule", items: [], selected: new Set(), overrides: {}, editId: null, pfmStatus: null };
+  const state = { placement: "timeline", when: "schedule", items: [], selected: new Set(), overrides: {}, editId: null, pfmStatus: null, varyInfo: null, repeated: 0 };
   const accounts = (await loadAccounts()).filter((a) => a.status === "connected");
   const groups = await loadGroups();
   const accById = new Map(accounts.map((a) => [a.id, a]));
@@ -274,10 +276,97 @@
   $("#vary").addEventListener("change", () => { $("#overrides").hidden = !$("#vary").checked; renderOverrides(true); });
   function renderOverrides(fill) {
     const box = $("#overrides");
-    if (!$("#vary").checked) return;
+    updateGenBtn();
+    if (!$("#vary").checked) { renderVaryStatus(); return; }
     const ids = [...state.selected];
-    box.innerHTML = ids.length ? ids.map((id) => { const a = accById.get(id); return `<div class="field"><label>${esc(a ? handle(a) : id)} <span class="muted">· ${esc(platformName(a?.platform))}</span></label><textarea data-ov="${id}" rows="3">${esc(state.overrides[id] ?? (fill ? cap.value : cap.value))}</textarea></div>`; }).join("") : `<p class="help">Selecione as contas para variar a legenda.</p>`;
-    box.querySelectorAll("textarea").forEach((t) => { if (!(t.dataset.ov in state.overrides)) state.overrides[t.dataset.ov] = t.value; t.addEventListener("input", () => { state.overrides[t.dataset.ov] = t.value; renderPreview(); }); });
+    box.innerHTML = ids.length ? ids.map((id) => { const a = accById.get(id); return `<div class="field ov" data-ovf="${id}"><label>${esc(a ? handle(a) : id)} <span class="muted">· ${esc(platformName(a?.platform))}</span> <span class="ov-tag" data-ovt="${id}"></span></label><textarea data-ov="${id}" rows="3">${esc(state.overrides[id] ?? cap.value)}</textarea></div>`; }).join("") : `<p class="help">Selecione as contas para variar a legenda.</p>`;
+    box.querySelectorAll("textarea").forEach((t) => { if (!(t.dataset.ov in state.overrides)) state.overrides[t.dataset.ov] = t.value; t.addEventListener("input", () => { state.overrides[t.dataset.ov] = t.value; markRepeats(); renderVaryStatus(); renderPreview(); }); });
+    markRepeats(); renderVaryStatus();
+  }
+
+  // ------------------------------------------------------------- variações automáticas
+  // "✨ Criar variações": a 1ª conta fica com a legenda original e cada uma das
+  // outras ganha uma versão diferente. Com IA ligada no time (Config), quem
+  // reescreve é a IA; sem ela (ou se falhar/faltar), o gerador automático.
+  const genBtn = $("#gen-vary");
+  const normCap = (s) => String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  const nomeDe = (id) => { const a = accById.get(id); return a ? handle(a) : id; };
+  const legendaDe = (id) => ($("#vary").checked && state.overrides[id] != null ? state.overrides[id] : cap.value);
+  function updateGenBtn() {
+    if (genBtn.dataset.busy) return;
+    const n = state.selected.size;
+    genBtn.disabled = n < 2;
+    genBtn.title = n < 2 ? "Escolha 2 ou mais contas para variar a legenda" : `Uma legenda diferente para cada uma das ${n} contas, a partir da legenda acima`;
+    genBtn.textContent = n >= 2 ? `✨ Criar variações · ${n} contas` : "✨ Criar variações";
+  }
+  function markRepeats() {
+    const ids = [...state.selected];
+    const grupos = new Map();
+    for (const id of ids) { const k = normCap(legendaDe(id)); if (!k) continue; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(id); }
+    let repetidas = 0;
+    for (const g of grupos.values()) if (g.length > 1) repetidas += g.length;
+    document.querySelectorAll("[data-ovt]").forEach((el) => {
+      const id = el.dataset.ovt;
+      const outras = (grupos.get(normCap(legendaDe(id))) || []).filter((x) => x !== id);
+      const original = state.varyInfo && id === ids[0] && normCap(state.overrides[id]) === normCap(state.varyInfo.base);
+      el.innerHTML = (original ? `<span class="pill neutral">original</span>` : "") + (outras.length ? ` <span class="pill warn">igual a ${esc(nomeDe(outras[0]))}${outras.length > 1 ? ` +${outras.length - 1}` : ""}</span>` : "");
+      el.closest(".ov")?.classList.toggle("repeat", outras.length > 0);
+    });
+    state.repeated = repetidas;
+  }
+  function renderVaryStatus() {
+    const el = $("#vary-status");
+    const n = state.selected.size;
+    const inf = state.varyInfo;
+    if (!$("#vary").checked || n < 2) { el.hidden = true; el.innerHTML = ""; return; }
+    const partes = [];
+    if (inf) {
+      const quem = inf.fonte === "ia" ? `reescritas pela IA (${esc(inf.provider)})${inf.completadas ? ` · ${inf.completadas} pelo gerador automático` : ""}` : "feitas pelo gerador automático, sem IA";
+      partes.push(`<div class="vary-note ${inf.fonte}"><span>✨ ${n} legendas, uma por conta · ${quem}</span><span class="inline"><button type="button" class="btn ghost small" data-vary="again">Gerar de novo</button><button type="button" class="btn ghost small" data-vary="same">Usar a mesma para todas</button></span></div>`);
+      if (normCap(cap.value) !== normCap(inf.base)) partes.push(`<div class="warn-box">A legenda principal mudou depois das variações. <button type="button" class="linkbtn" data-vary="again">Gerar de novo a partir dela</button></div>`);
+      if (inf.fracas) partes.push(`<div class="warn-box">${inf.fracas} ${inf.fracas === 1 ? "variação só ganhou" : "variações só ganharam"} um emoji: a legenda tem pouca coisa que o gerador automático sabe trocar. Edite essas contas ou <a href="../config/#ia">ligue a IA grátis</a> para reescritas de verdade.</div>`);
+      else if (inf.fonte === "local") partes.push(`<p class="help">Quer cada legenda reescrita de verdade? <a href="../config/#ia">Ligue a IA grátis em Config</a>.</p>`);
+    }
+    if (state.repeated) partes.push(`<div class="warn-box">${state.repeated} contas estão com a legenda repetida (marcadas abaixo). ${inf ? "Edite as marcadas ou gere de novo." : `<button type="button" class="linkbtn" data-vary="again">Criar variações</button> para cada conta sair com uma legenda diferente.`}</div>`);
+    el.hidden = !partes.length;
+    el.innerHTML = partes.join("");
+  }
+  $("#vary-status").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-vary]"); if (!b) return;
+    if (b.dataset.vary === "again") { gerarVariacoes(); return; }
+    state.overrides = {}; state.varyInfo = null; $("#vary").checked = false; $("#overrides").hidden = true; $("#overrides").innerHTML = "";
+    renderOverrides(true); renderPreview();
+  });
+  genBtn.addEventListener("click", gerarVariacoes);
+  async function gerarVariacoes() {
+    const base = cap.value.trim();
+    const ids = [...state.selected];
+    if (ids.length < 2) { toast("Escolha 2 ou mais contas para variar a legenda.", "info"); return; }
+    if (!base) { toast("Escreva a legenda primeiro: as variações saem dela.", "info"); cap.focus(); return; }
+    const precisa = ids.length - 1;
+    genBtn.dataset.busy = "1"; genBtn.disabled = true; genBtn.innerHTML = `<span class="spinner"></span> Criando ${ids.length} legendas…`;
+    let variacoes = [], fonte = "local", provider = null, completadas = 0, fracas = 0, aviso = null;
+    try {
+      const r = await api("/captions/vary", { method: "POST", body: { caption: base, count: precisa } });
+      variacoes = (r.variations || []).filter((v) => typeof v === "string" && v.trim());
+      if (variacoes.length) { fonte = "ia"; provider = r.provider_label || r.provider; }
+    } catch (err) {
+      if (err.code !== "sem_ia" && err.status !== 404) aviso = err.message;
+    }
+    if (variacoes.length < precisa) {
+      const r = variarLegenda(base, precisa - variacoes.length, { seed: Date.now() & 0x7fffffff, evitar: variacoes });
+      if (fonte === "ia") completadas = r.variacoes.length;
+      fracas = r.fracas;
+      variacoes = [...variacoes, ...r.variacoes];
+    }
+    state.overrides = { [ids[0]]: base };
+    ids.slice(1).forEach((id, i) => { state.overrides[id] = variacoes[i] ?? base; });
+    state.varyInfo = { base, fonte, provider, completadas, fracas };
+    $("#vary").checked = true; $("#overrides").hidden = false;
+    delete genBtn.dataset.busy;
+    renderOverrides(true); renderPreview();
+    if (aviso) toast(`A IA não respondeu agora: ${aviso} Usei o gerador automático.`, "info", 7000);
+    else toast(`${ids.length} legendas prontas, uma por conta. Confira e ajuste se quiser.`, "ok");
   }
 
   // ------------------------------------------------------------- contas

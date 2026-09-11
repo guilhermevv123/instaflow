@@ -41,7 +41,7 @@ scripts/publish-site.sh  cria o repo público e ativa o GitHub Pages
 ## Como funciona
 
 1. **Contas** → "+ Conectar" → escolhe a rede; a autorização oficial abre numa janela pop-up; ao voltar, a janela avisa a página que abriu (`postMessage`) e fecha — a sessão de quem clicou nunca se perde, seja no local, no Pages ou num domínio próprio. Sem pop-up, segue na mesma aba.
-2. **Criar** → tipo (Feed, Reels, Stories), mídia (sobe direto para o Post for Me), legenda (com variação por conta), contas/grupos, data e hora (Bahia). Foto fora de 4:5–1.91:1 abre o **✂ Ajustar** (`assets/cropper.js`): proporção, zoom/arrastar (Cortar) ou Caber inteira com fundo (cor da foto, desfocado, branco, preto). Sai JPEG 92% com até 1440 px de largura e vai com `skip_processing: true`. Foto com menos de 1080 px de largura recebe aviso de nitidez.
+2. **Criar** → tipo (Feed, Reels, Stories), mídia (sobe direto para o Post for Me), legenda (com variação por conta), contas/grupos, data e hora (Bahia). O botão **✨ Criar variações** preenche uma legenda diferente para cada conta escolhida: a 1ª fica com a original e as outras ganham versões com o mesmo sentido — escritas pela IA do time, se ligada em Config, ou pelo gerador automático `assets/variar.js` (grátis, no navegador: troca expressões comuns, vocativo, quebras de linha, emojis equivalentes e a ordem das hashtags). Números (ex.: 44144), @menções, links e #hashtags nunca mudam; contas com legenda repetida ficam marcadas. Foto fora de 4:5–1.91:1 abre o **✂ Ajustar** (`assets/cropper.js`): proporção, zoom/arrastar (Cortar) ou Caber inteira com fundo (cor da foto, desfocado, branco, preto). Sai JPEG 92% com até 1440 px de largura e vai com `skip_processing: true`. Foto com menos de 1080 px de largura recebe aviso de nitidez.
 3. A função `api` cria **1 post no Post for Me com N contas** e grava `posts` + `post_targets` (uma linha por conta).
 4. No horário, o Post for Me publica (checa a cada 2 min) e chama `pfm-webhook` com o resultado de cada conta. A **Fila** mostra publicado/falhou/link do post; "Atualizar status" confere direto na API se algum aviso se perder.
 5. Falhou em 2 de 20? "Reenviar agora para as que falharam" cria um reenvio só para elas.
@@ -99,6 +99,7 @@ docker run -d -p 8080:80 --name instaflow instaflow   # http://localhost:8080/
 
 - A chave do Post for Me só existe nos secrets do Supabase; o navegador nunca a vê.
 - Toda tabela tem RLS por time (`team_id in my_team_ids()`); `app_settings` e `webhook_events` só a service role.
+- A chave de IA de cada time fica em `team_ai_keys` (sem policy: só a service role lê); a API devolve só o começo e o fim dela e testa a chave antes de salvar. Limite de 150 gerações com IA por time a cada 24 h (`ai_calls`).
 - O webhook confere o segredo do Post for Me (cabeçalho `Post-For-Me-Webhook-Secret`) antes de aceitar.
 - Nunca rode `supabase config push` neste projeto (sobrescreve o Auth do painel).
 
@@ -107,3 +108,4 @@ docker run -d -p 8080:80 --name instaflow instaflow   # http://localhost:8080/
 - Nova migration: `supabase migration new nome` → editar → `supabase db push`.
 - Funções: `supabase functions deploy api --no-verify-jwt` (idem `pfm-webhook`). Checagem local: `cd supabase/functions && deno check api/index.ts pfm-webhook/index.ts`.
 - Site: editar `docs/` e `git push` (Pages publica sozinho).
+- Testes: `node --test tests/variar.test.mjs` (gerador local de variações) e `cd supabase/functions && deno test --allow-env --allow-net _shared/` (IA: provedores, conferência das versões e rotas com banco falso).

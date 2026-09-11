@@ -19,8 +19,13 @@
 //   POST   /sync                      confere todas as publicações pendentes do time
 //   GET    /usage                     uso do mês e estado do webhook
 //   POST   /webhooks/setup            registra o webhook no Post for Me (global)
+//   GET    /ai                        IA do time para variar legendas (estado, nunca a chave)
+//   PUT    /ai                        liga/troca a chave de IA do time (dono/admin; testa antes de salvar)
+//   DELETE /ai                        desliga a IA do time (dono/admin)
+//   POST   /captions/vary             N variações da legenda com a IA do time
 
 import { friendlyError } from "../_shared/friendly.ts";
+import { aiRemove, aiSave, aiStatus, varyCaptions } from "../_shared/ia-rotas.ts";
 import { listData, pfm, PfmError, pfmListAll, type PfmAccount, type PfmPost, type PfmResult, type PfmWebhook } from "../_shared/pfm.ts";
 import { background, type Caller, corsHeaders, HttpError, json, readJson, requireMember, serviceClient, SUPABASE_URL, teamOf, teamTag } from "../_shared/util.ts";
 
@@ -120,9 +125,14 @@ Deno.serve(async (req) => {
     if (req.method === "GET" && path === "/usage") return json(req, await usage(db, caller));
     if (req.method === "POST" && path === "/webhooks/setup") return json(req, await ensureWebhook(db, true));
 
+    if (req.method === "GET" && path === "/ai") return json(req, await aiStatus(db, caller));
+    if (req.method === "PUT" && path === "/ai") return json(req, await aiSave(db, caller, await readJson<{ key?: string }>(req)));
+    if (req.method === "DELETE" && path === "/ai") return json(req, await aiRemove(db, caller));
+    if (req.method === "POST" && path === "/captions/vary") return json(req, await varyCaptions(db, caller, await readJson<{ caption?: string; count?: number }>(req)));
+
     throw new HttpError(404, `Rota não encontrada: ${req.method} ${path}`);
   } catch (e) {
-    if (e instanceof HttpError) return json(req, { error: e.message }, e.status);
+    if (e instanceof HttpError) return json(req, { error: e.message, ...(e.code ? { code: e.code } : {}) }, e.status);
     if (e instanceof PfmError) {
       console.error("Post for Me:", e.status, e.message, JSON.stringify(e.body).slice(0, 500));
       return json(req, { error: `Post for Me: ${e.message}`, details: e.body }, e.status >= 500 ? 502 : e.status);

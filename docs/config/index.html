@@ -35,6 +35,17 @@
       <div id="pfm" class="stack"><span class="sk sk-line" style="width:60%"></span><span class="sk sk-line" style="width:45%"></span><span class="sk sk-line thin" style="width:70%"></span></div>
       <div class="inline"><button class="btn ghost small" id="test">Testar conexão</button><button class="btn ghost small" id="hook">Registrar/atualizar avisos (webhook)</button><button class="btn ghost small" id="syncall">Conferir publicações pendentes</button></div>
     </section>
+    <section class="card" id="ia">
+      <div class="split"><h2>Variações de legenda com IA</h2><span id="ai-pill"><span class="sk sk-pill"></span></span></div>
+      <p class="help">O botão <b>✨ Criar variações</b>, na tela Criar, faz uma legenda diferente para cada conta a partir da sua. Sem IA, ele troca expressões comuns, emojis e a ordem das hashtags. Com IA, cada conta ganha a legenda reescrita de verdade, com o mesmo sentido e os mesmos números, @menções e hashtags.</p>
+      <div id="ai-state" class="stack"><span class="sk sk-line" style="width:55%"></span></div>
+      <form id="ai-form" class="stack" novalidate hidden>
+        <div class="field"><label for="ai-key">Chave da IA</label><input id="ai-key" class="input mono" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Cole aqui (AIza…, gsk_…, sk-…)"></div>
+        <div class="inline"><button class="btn small" type="submit" id="ai-save">Salvar e testar</button><button class="btn ghost small" type="button" id="ai-cancel" hidden>Cancelar</button><a class="small" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Criar chave grátis no Google AI Studio →</a></div>
+        <div id="ai-msg"></div>
+        <p class="help">Aceita Google Gemini (tem plano grátis; recomendado), Groq (grátis), OpenAI, Anthropic ou OpenRouter. A chave fica guardada no servidor e não aparece mais no navegador depois de salva. No plano grátis do Google, os textos enviados podem ser usados por ele para melhorar os produtos.</p>
+      </form>
+    </section>
     <section class="card">
       <h2>Uso do mês</h2>
       <div id="usage" class="stack"></div>
@@ -131,7 +142,45 @@
   $("#test").addEventListener("click", async () => { try { const r = await api("/health"); toast(`Conexão OK · ${r.accounts_total} conta(s) neste time.`, "ok"); } catch (e) { toast(e.message, "error"); } });
   $("#hook").addEventListener("click", async () => { try { const r = await api("/webhooks/setup", { method: "POST", body: {} }); toast(r.created ? "Webhook registrado." : "Webhook já estava ativo.", "ok"); loadUsage(); } catch (e) { toast(e.message, "error"); } });
   $("#syncall").addEventListener("click", async () => { try { const r = await api("/sync", { method: "POST", body: {} }); toast(`${r.checked} publicação(ões) conferida(s).`, "ok"); } catch (e) { toast(e.message, "error"); } });
-  await Promise.all([loadTeam(), loadUsage()]);
+  // ------------------------------------------------------------- IA das variações
+  function paintIa(s) {
+    $("#ai-pill").innerHTML = s.configured ? `<span class="pill ok">ligada</span>` : `<span class="pill neutral">desligada</span>`;
+    $("#ai-state").innerHTML = s.configured
+      ? `<div class="split"><span>Provedor</span><b>${esc(s.provider_label)}</b></div>
+         <div class="split"><span>Modelo</span><span class="muted small mono">${esc(s.model || "padrão")}</span></div>
+         <div class="split"><span>Chave</span><span class="muted small mono">${esc(s.key_hint)}</span></div>
+         <div class="split"><span>Gerações nas últimas 24 h</span><span class="muted small">${s.calls_today} de ${s.limit_day}</span></div>
+         ${s.can_edit ? `<div class="inline"><button class="btn ghost small" type="button" id="ai-change">Trocar chave</button><button class="btn danger small" type="button" id="ai-remove">Desligar IA</button></div>` : ""}`
+      : `<p class="help">${s.can_edit ? "Cole uma chave abaixo para ligar. Sem ela, o botão continua funcionando com o gerador automático." : "Só o dono ou um admin do time liga a IA. Sem ela, o botão usa o gerador automático."}</p>`;
+    $("#ai-form").hidden = !(s.can_edit && !s.configured);
+    $("#ai-cancel").hidden = true;
+  }
+  async function loadIa() {
+    try { paintIa(await api("/ai")); }
+    catch (e) { $("#ai-pill").innerHTML = ""; $("#ai-state").innerHTML = e.status === 404 ? `<p class="help">A IA ainda não está disponível neste servidor.</p>` : `<div class="error-box">${esc(e.message)}</div>`; }
+  }
+  $("#ai-state").addEventListener("click", async (e) => {
+    if (e.target.closest("#ai-change")) { $("#ai-form").hidden = false; $("#ai-cancel").hidden = false; $("#ai-key").focus(); return; }
+    if (!e.target.closest("#ai-remove")) return;
+    if (!(await confirmDialog("Desligar a IA deste time? O botão de variações volta a usar o gerador automático.", { okLabel: "Desligar", danger: true }))) return;
+    try { paintIa(await api("/ai", { method: "DELETE" })); toast("IA desligada.", "ok"); } catch (err) { toast(err.message, "error"); }
+  });
+  $("#ai-cancel").addEventListener("click", () => { $("#ai-form").hidden = true; $("#ai-key").value = ""; $("#ai-msg").innerHTML = ""; });
+  $("#ai-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const key = $("#ai-key").value.trim(); if (!key) { $("#ai-key").focus(); return; }
+    const btn = $("#ai-save"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Testando a chave…`; $("#ai-msg").innerHTML = "";
+    try {
+      const s = await api("/ai", { method: "PUT", body: { key } });
+      $("#ai-key").value = "";
+      paintIa(s);
+      toast(`IA ligada · ${s.provider_label}.`, "ok");
+      if (s.warning) $("#ai-state").insertAdjacentHTML("beforeend", `<div class="warn-box">${esc(s.warning)}</div>`);
+    } catch (err) { $("#ai-msg").innerHTML = `<div class="error-box">${esc(err.message)}</div>`; }
+    finally { btn.disabled = false; btn.textContent = "Salvar e testar"; }
+  });
+
+  await Promise.all([loadTeam(), loadUsage(), loadIa()]);
   pageReady();
 </script>
 </body>

@@ -35,9 +35,11 @@ export function json(req: Request, body: unknown, status = 200, extra: Record<st
 
 export class HttpError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  code?: string; // para o painel decidir o que fazer (ex.: "sem_ia" → gerador local)
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 

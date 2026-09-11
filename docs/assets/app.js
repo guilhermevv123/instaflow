@@ -110,7 +110,12 @@ export async function api(path, { method = "GET", body } = {}) {
   let payload = null;
   const text = await res.text();
   try { payload = text ? JSON.parse(text) : null; } catch { payload = { error: text }; }
-  if (!res.ok) throw new Error(payload?.error || `Erro ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(payload?.error || `Erro ${res.status}`);
+    err.status = res.status;
+    err.code = payload?.code || null;
+    throw err;
+  }
   return payload;
 }
 

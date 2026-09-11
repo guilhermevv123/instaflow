@@ -402,3 +402,13 @@ dialog.modal::backdrop { background: rgba(8, 9, 12, .55); backdrop-filter: blur(
   .menu { position: fixed; left: 10px; right: 10px; top: auto; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 45; min-width: 0; padding: 8px; }
   .menu button { padding: 12px; }
 }
+
+/* ---- variações de legenda (Criar) */
+.btn.ghost.accent { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.btn.ghost.accent:hover:not(:disabled) { background: var(--accent-soft); }
+.vary-note { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; background: var(--accent-soft); color: var(--accent); padding: 8px 10px 8px 12px; border-radius: 9px; font-size: .86rem; font-weight: 600; }
+.vary-note.local { background: var(--surface-2); color: var(--ink-2); }
+.vary-note .btn.ghost { background: var(--surface); }
+.ov-tag .pill { text-transform: none; letter-spacing: normal; margin-left: 2px; }
+.field.ov.repeat textarea { border-color: var(--warn); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 35%, transparent); }
+.linkbtn { background: none; border: 0; padding: 0; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }

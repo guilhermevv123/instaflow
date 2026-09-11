@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Início · InstaFlow</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/dashboard.css">
 <script src="assets/config.js"></script>
   <link rel="icon" type="image/svg+xml" href="assets/brand/instaflow-icon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/brand/favicon-32.png">
@@ -18,74 +19,155 @@
 <main class="shell">
   <div class="page-head">
     <div><div class="eyebrow" id="today"></div><h1 class="h1">Início</h1></div>
-    <div class="actions"><a class="btn" href="criar/">+ Criar publicação</a></div>
+    <div class="actions dash-top">
+      <div class="seg" id="period" role="tablist" aria-label="Período dos gráficos"><button type="button" data-d="7">7 dias</button><button type="button" data-d="30" class="on">30 dias</button><button type="button" data-d="90">90 dias</button></div>
+      <a class="btn" href="criar/">+ Criar publicação</a>
+    </div>
   </div>
-  <div class="stats" id="stats"><div class="stat"><b>…</b><span>carregando</span></div></div>
   <div id="alerts" class="stack"></div>
-  <div class="grid c2">
-    <section class="card"><div class="split"><h2>Próximas publicações</h2><a class="small" href="calendario/">Calendário →</a></div><div class="list" id="next"></div></section>
-    <section class="card"><div class="split"><h2>Falhas para resolver</h2><a class="small" href="fila/?tab=failed">Ver todas →</a></div><div class="list" id="failed"></div></section>
+
+  <div class="dash-sec">Seus números</div>
+  <div class="kpis" id="kpis">
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
+    <div class="kpi"><span class="sk sk-line" style="width:55%"></span><span class="sk" style="height:30px;width:40%"></span><span class="sk sk-line thin" style="width:80%"></span></div>
   </div>
-  <section class="card"><div class="split"><h2>Contas</h2><a class="small" href="contas/">Gerenciar →</a></div><div class="list" id="accounts"></div></section>
+
+  <section class="chart-card">
+    <div class="chart-head">
+      <div class="chart-title"><span class="ib" data-ico="ritmo"></span><div><h2>Ritmo de publicação: Publicadas x Falhas</h2><p id="ritmo-sub">Por dia, conta a conta</p></div></div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>Publicadas</span><span><i class="dash" style="border-color:var(--bad)"></i>Falhas</span><span><i class="dash" style="border-color:var(--time)"></i>Agendadas</span></div>
+    </div>
+    <div class="ch-wrap" id="ch-ritmo"><span class="sk" style="display:block;height:280px"></span></div>
+  </section>
+
+  <div class="dash-grid2">
+    <section class="card"><div class="split"><h2>Próximas publicações</h2><a class="small" href="calendario/">Calendário →</a></div><div class="list" id="next"><div class="sk-list" aria-busy="true"><div class="sk-row"><span class="sk sk-pill"></span><span class="sk-lines"><span class="sk sk-line" style="width:60%"></span><span class="sk sk-line thin" style="width:35%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-pill"></span><span class="sk-lines"><span class="sk sk-line" style="width:50%"></span><span class="sk sk-line thin" style="width:30%"></span></span><span class="sk sk-pill"></span></div></div></div></section>
+    <section class="card"><div class="split"><h2>Falhas para resolver</h2><a class="small" href="fila/?tab=failed">Ver todas →</a></div><div class="list" id="failed"><div class="sk-list" aria-busy="true"><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:60%"></span><span class="sk sk-line thin" style="width:40%"></span></span><span class="sk sk-pill"></span></div></div></div></section>
+  </div>
+
+  <section class="chart-card">
+    <div class="chart-head">
+      <div class="chart-title"><span class="ib" data-ico="funil"></span><div><h2>Funil do mês <small id="funil-mes"></small></h2><p>Do agendado ao post no ar, conta a conta</p></div></div>
+      <span class="badge-ok" id="funil-badge" hidden></span>
+    </div>
+    <div class="ch-wrap" id="ch-funil"><span class="sk" style="display:block;height:220px"></span></div>
+  </section>
+
+  <div class="dash-grid2">
+    <section class="chart-card">
+      <div class="chart-head">
+        <div class="chart-title"><span class="ib" data-ico="dist"></span><div><h2>Distribuição</h2><p id="dist-sub">No período</p></div></div>
+        <div class="dash-tabs" id="dist-tabs"><button type="button" class="chip on" data-t="rede">Por rede</button><button type="button" class="chip" data-t="tipo">Por tipo</button><button type="button" class="chip" data-t="falhas">Motivos de falha</button></div>
+      </div>
+      <div class="ch-wrap" id="ch-dist"><span class="sk" style="display:block;height:200px"></span></div>
+    </section>
+    <section class="chart-card">
+      <div class="chart-head">
+        <div class="chart-title"><span class="ib" data-ico="mes"></span><div><h2>Publicações por mês</h2><p>Últimos 6 meses, conta a conta</p></div></div>
+        <button type="button" class="btn ghost small" id="export"><span data-ico="baixar" style="display:inline-grid;width:16px;height:16px"></span>Exportar</button>
+      </div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>Publicadas</span><span><i style="background:var(--bad)"></i>Falhas</span></div>
+      <div class="ch-wrap" id="ch-mes"><span class="sk" style="display:block;height:240px"></span></div>
+    </section>
+  </div>
+
+  <div class="dash-grid2">
+    <section class="chart-card">
+      <div class="chart-head">
+        <div class="chart-title"><span class="ib" data-ico="hora"></span><div><h2>Quando você publica</h2><p>Horários dos últimos 90 dias e da próxima semana (Bahia)</p></div></div>
+        <div class="heat-scale">menos<i style="--a:0%"></i><i style="--a:35%"></i><i style="--a:65%"></i><i style="--a:100%"></i>mais</div>
+      </div>
+      <div class="ch-scrollx" id="ch-heat"></div>
+    </section>
+    <section class="chart-card">
+      <div class="chart-head">
+        <div class="chart-title"><span class="ib" data-ico="contas"></span><div><h2>Contas que mais publicam</h2><p id="top-sub">No período</p></div></div>
+        <a class="small" href="contas/">Gerenciar →</a>
+      </div>
+      <div class="top-list" id="ch-top"></div>
+    </section>
+  </div>
 </main>
 <script type="module">
-  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountName, accountHealth, postSummaryPill, PLACEMENT, toast, pageReady } from "./assets/app.js";
+  import { supa, requireAuth, api, renderNav, fmt, esc, accountHealth, postSummaryPill, PLACEMENT, toast, pageReady, team } from "./assets/app.js";
+  import { paintAll, paintDist, exportCsv, paintIcons } from "./assets/dash.js";
   renderNav("inicio", "./");
-  const session = await requireAuth("./");
-  document.getElementById("today").textContent = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Bahia", weekday: "long", day: "numeric", month: "long" }).format(new Date());
+  paintIcons(document);
+  await requireAuth("./");
+  const $ = (s) => document.querySelector(s);
+  $("#today").textContent = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Bahia", weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
-  const nowIso = new Date().toISOString();
-  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
-  const in7d = new Date(Date.now() + 7 * 86400000).toISOString();
+  let days = 30, dash = null, accounts = [];
+  try { const d = Number(localStorage.getItem("if.dash.days")); if ([7, 30, 90].includes(d)) days = d; } catch {}
+  const markPeriod = () => $("#period").querySelectorAll("[data-d]").forEach((b) => { const on = Number(b.dataset.d) === days; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
+  markPeriod();
 
-  // confere no Post for Me o que já deveria ter saído (em segundo plano)
-  api("/sync", { method: "POST", body: {} }).then((r) => { if (r.checked) load(); }).catch(() => {});
+  async function fetchDash() {
+    const { data, error } = await supa.rpc("dashboard", { p_team: team.id, p_days: days });
+    if (error) throw error;
+    if (!data) throw new Error("Sem acesso aos números deste time.");
+    return data;
+  }
+  async function loadDash() {
+    document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = ".55"));
+    try { dash = await fetchDash(); paintAll(dash, { accounts }); }
+    catch (e) { toast(e.message, "error"); }
+    finally { document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = "")); }
+  }
 
-  async function load() {
-    const [{ data: next }, { data: failed }, { data: accounts }, { data: todayPosts }] = await Promise.all([
-      supa.from("post_overview").select("*").in("status", ["scheduled", "processing"]).order("scheduled_at", { ascending: true, nullsFirst: true }).limit(8),
-      supa.from("post_targets").select("post_id, account_id, error, updated_at, posts!inner(title, caption, scheduled_at), accounts!inner(username, label, platform)").eq("status", "failed").gte("updated_at", new Date(Date.now() - 7 * 86400000).toISOString()).order("updated_at", { ascending: false }).limit(8),
-      supa.from("accounts").select("*").eq("archived", false).order("username"),
-      supa.from("post_overview").select("id, targets_total").gte("scheduled_at", dayStart.toISOString()).lt("scheduled_at", new Date(dayStart.getTime() + 86400000).toISOString()).neq("status", "canceled"),
+  async function loadLists() {
+    const since = new Date(Date.now() - 7 * 86400000).toISOString();
+    const [{ data: next }, { data: failed }, { data: accs }] = await Promise.all([
+      supa.from("post_overview").select("*").eq("team_id", team.id).in("status", ["scheduled", "processing"]).order("scheduled_at", { ascending: true, nullsFirst: true }).limit(6),
+      supa.from("post_targets").select("post_id, account_id, error, updated_at, posts!inner(title, caption, scheduled_at, team_id), accounts!inner(username, label, platform)").eq("posts.team_id", team.id).eq("status", "failed").gte("updated_at", since).order("updated_at", { ascending: false }).limit(6),
+      supa.from("accounts").select("*").eq("team_id", team.id).eq("archived", false).order("username"),
     ]);
-    const todayCount = (todayPosts || []).length;
-    const todayTargets = (todayPosts || []).reduce((s, p) => s + (p.targets_total || 0), 0);
-    const attention = (accounts || []).filter((a) => accountHealth(a)[1] !== "ok");
-    document.getElementById("stats").innerHTML = `
-      <div class="stat"><b class="num">${todayCount}</b><span>agendamentos hoje · ${todayTargets} posts</span></div>
-      <div class="stat ${failed?.length ? "bad" : ""}"><b class="num">${failed?.length || 0}</b><span>falhas nos últimos 7 dias</span></div>
-      <div class="stat ${attention.length ? "warn" : ""}"><b class="num">${(accounts || []).length}</b><span>contas · ${attention.length ? attention.length + " precisam de atenção" : "todas em dia"}</span></div>`;
-
-    const alerts = document.getElementById("alerts");
-    alerts.innerHTML = attention.slice(0, 3).map((a) => {
-      const [label, kind] = accountHealth(a);
-      return `<div class="${kind === "bad" ? "error-box" : "warn-box"} split"><span><b>@${esc(a.username)}</b> · ${esc(label)}</span><a class="btn small ghost" href="contas/">Resolver</a></div>`;
-    }).join("");
-    if (!(accounts || []).length) alerts.innerHTML = `<div class="warn-box split"><span>Nenhuma conta conectada ainda.</span><a class="btn small" href="contas/">Conectar Instagram</a></div>`;
-
-    document.getElementById("next").innerHTML = (next || []).length ? next.map((p) => `
+    accounts = accs || [];
+    const attention = accounts.filter((a) => accountHealth(a)[1] !== "ok");
+    $("#alerts").innerHTML = !accounts.length
+      ? `<div class="warn-box split"><span>Nenhuma conta conectada ainda.</span><a class="btn small" href="contas/">Conectar conta</a></div>`
+      : attention.slice(0, 3).map((a) => { const [label, kind] = accountHealth(a); return `<div class="${kind === "bad" ? "error-box" : "warn-box"} split"><span><b>${esc(a.label || "@" + a.username)}</b> · ${esc(label)}</span><a class="btn small ghost" href="contas/">Resolver</a></div>`; }).join("");
+    $("#next").innerHTML = (next || []).length ? next.map((p) => `
       <a class="row link post-row" href="fila/?post=${p.id}" style="text-decoration:none;color:inherit">
         <span class="chip time">${p.scheduled_at ? fmt.dateTimeLong(p.scheduled_at) : "agora"}</span>
         <span><div class="title">${esc(p.title || p.caption.slice(0, 60) || "(sem título)")}</div><div class="sub">${PLACEMENT[p.placement]} · ${p.targets_total} contas</div></span>
         ${postSummaryPill(p)}
-      </a>`).join("") : `<div class="empty">Nada agendado. <a href="criar/">Criar a primeira publicação</a>.</div>`;
-
-    document.getElementById("failed").innerHTML = (failed || []).length ? failed.map((t) => `
+      </a>`).join("") : `<div class="empty">Nada agendado. <a href="criar/">Criar a próxima publicação</a>.</div>`;
+    $("#failed").innerHTML = (failed || []).length ? failed.map((t) => `
       <a class="row link" href="fila/?post=${t.post_id}" style="text-decoration:none;color:inherit">
         <span class="dot failed"></span>
         <span><div class="title">@${esc(t.accounts.username)} · ${esc(t.posts.title || t.posts.caption.slice(0, 40))}</div><div class="sub">${esc(t.error || "Falhou")}</div></span>
         <span class="muted small">${fmt.relative(t.updated_at)}</span>
-      </a>`).join("") : `<div class="empty">Nenhuma falha. 🎉</div>`;
-
-    const { data: usage } = await supa.from("account_usage_24h").select("*");
-    const usageMap = new Map((usage || []).map((u) => [u.account_id, u.published_24h]));
-    document.getElementById("accounts").innerHTML = (accounts || []).length ? accounts.map((a) => {
-      const [label, kind] = accountHealth(a);
-      const used = usageMap.get(a.id) || 0;
-      return `<div class="row">${avatar(a)}<span><div class="title">${accountName(a)}</div><div class="sub">${used} de 100 posts nas últimas 24 h</div></span><span class="pill ${kind}">${esc(label)}</span></div>`;
-    }).join("") : `<div class="empty">Nenhuma conta conectada.</div>`;
+      </a>`).join("") : `<div class="empty">Nenhuma falha nos últimos 7 dias. 🎉</div>`;
   }
-  load().catch((e) => toast(e.message, "error")).finally(pageReady);
+
+  $("#period").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-d]");
+    if (!b || Number(b.dataset.d) === days) return;
+    days = Number(b.dataset.d);
+    try { localStorage.setItem("if.dash.days", String(days)); } catch {}
+    markPeriod();
+    loadDash();
+  });
+  $("#dist-tabs").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-t]");
+    if (!b || !dash) return;
+    $("#dist-tabs").querySelectorAll("[data-t]").forEach((x) => x.classList.toggle("on", x === b));
+    paintDist($("#ch-dist"), $("#dist-sub"), dash, b.dataset.t);
+  });
+  $("#export").addEventListener("click", () => { if (dash) exportCsv(dash); });
+
+  try {
+    const [, d] = await Promise.all([loadLists(), fetchDash()]);
+    dash = d;
+    paintAll(dash, { accounts });
+  } catch (e) { toast(e.message, "error"); }
+  pageReady();
+  // confere no Post for Me o que já deveria ter saído (em segundo plano) e atualiza
+  api("/sync", { method: "POST", body: {} }).then((r) => { if (r.checked) { loadLists(); loadDash(); } }).catch(() => {});
 </script>
 </body>
 </html>

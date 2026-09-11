@@ -4,9 +4,10 @@ export const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-// Origens que podem chamar a API pelo navegador. Configure ALLOWED_ORIGINS
+// Origens que podem chamar a API pelo navegador. Configure INSTAFLOW_ALLOWED_ORIGINS
 // (separadas por vírgula) nos secrets; localhost entra sempre para testes.
-const extraOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+// (Nome com prefixo para não colidir com secrets de outros apps no mesmo projeto.)
+const extraOrigins = (Deno.env.get("INSTAFLOW_ALLOWED_ORIGINS") ?? Deno.env.get("ALLOWED_ORIGINS") ?? "")
   .split(",").map((s) => s.trim()).filter(Boolean);
 
 export function corsHeaders(req: Request): Record<string, string> {

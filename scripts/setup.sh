@@ -46,7 +46,7 @@ supabase db push
 echo "▶ 3/6 secrets"
 ORIGINS="${SITE_URL:-}"
 supabase secrets set --env-file "$ENV_FILE"
-if [[ -n "$ORIGINS" ]]; then supabase secrets set ALLOWED_ORIGINS="$ORIGINS"; fi
+if [[ -n "$ORIGINS" ]]; then supabase secrets set INSTAFLOW_ALLOWED_ORIGINS="$ORIGINS"; fi
 
 echo "▶ 4/6 funções"
 supabase functions deploy api --no-verify-jwt
@@ -61,7 +61,7 @@ scripts/write-config.sh "$REF"
 cat <<EOF
 
 ✔ Pronto. Próximos passos:
-  1. Publique a pasta site/ (GitHub Pages) e anote a URL, ex.: https://usuario.github.io/instaflow/
+  1. Publique a pasta docs/ (GitHub Pages) e anote a URL, ex.: https://usuario.github.io/instaflow/
   2. No painel do Post for Me (app.postforme.dev), no projeto Quickstart, defina o "Auth callback URL":
        <URL_DO_SITE>/contas/
   3. Entre no painel com $ADMIN (Primeiro acesso → cria a senha).

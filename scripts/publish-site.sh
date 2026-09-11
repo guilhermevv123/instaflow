@@ -15,8 +15,11 @@ else
 fi
 
 echo "▶ ativando GitHub Pages (main, pasta /docs)"
-gh api -X POST "repos/$USER/$REPO/pages" -f 'source[branch]=main' -f 'source[path]=/docs' >/dev/null 2>&1 || \
-gh api -X PUT "repos/$USER/$REPO/pages" -f 'source[branch]=main' -f 'source[path]=/docs' >/dev/null
+if gh api "repos/$USER/$REPO/pages" >/dev/null 2>&1; then
+  printf '{"source":{"branch":"main","path":"/docs"}}' | gh api -X PUT "repos/$USER/$REPO/pages" --input - >/dev/null
+else
+  printf '{"source":{"branch":"main","path":"/docs"}}' | gh api -X POST "repos/$USER/$REPO/pages" --input - >/dev/null
+fi
 
 echo "✔ Site: https://$USER.github.io/$REPO/   (leva 1–2 min para ficar no ar)"
-echo "  Depois rode: supabase secrets set ALLOWED_ORIGINS=https://$USER.github.io"
+echo "  Depois rode: supabase secrets set INSTAFLOW_ALLOWED_ORIGINS=https://$USER.github.io"

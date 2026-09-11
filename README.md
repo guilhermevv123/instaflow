@@ -41,13 +41,13 @@ scripts/setup.sh <PROJECT_REF> <seu@email> https://<usuario>.github.io
 
 # 3. site no ar
 scripts/publish-site.sh instaflow
-supabase secrets set ALLOWED_ORIGINS=https://<usuario>.github.io
+supabase secrets set INSTAFLOW_ALLOWED_ORIGINS=https://<usuario>.github.io
 
 # 4. no painel do Post for Me → projeto → Auth callback URL:
 #    https://<usuario>.github.io/instaflow/contas/
 ```
 
-Depois: entre com o e-mail admin ("Primeiro acesso" cria a senha), vá em **Config** → "Testar conexão" e "Registrar avisos", e em **Contas** → "Conectar Instagram".
+Depois: entre com o e-mail admin ("Primeiro acesso" cria a senha; se o e-mail já existir no Auth do projeto, use a senha que já tem ou "Esqueci a senha"), vá em **Config** → "Testar conexão" e "Registrar avisos", e em **Contas** → "Conectar Instagram".
 
 ## Onde está ligado hoje (10/09/2026)
 

@@ -1,5 +1,5 @@
 // InstaFlow · upload e validação de mídia (regras do Instagram).
-import { api, supa } from "./app.js";
+import { api, supa, team } from "./app.js";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const VIDEO_TYPES = ["video/mp4", "video/quicktime"];
@@ -57,8 +57,9 @@ export function validateItem(item, placement) {
     if (size > LIMITS.imageMaxBytes) errors.push(`${item.name}: imagem acima de 30 MB.`);
     if (placement === "reels") errors.push(`${item.name}: Reels precisa de um vídeo, não de imagem.`);
     if (ratio && placement === "timeline" && (ratio < LIMITS.feedRatio[0] - 0.01 || ratio > LIMITS.feedRatio[1] + 0.01)) {
-      warnings.push(`${item.name}: proporção fora de 4:5–1.91:1; será cortada automaticamente.`);
+      warnings.push(`${item.name}: proporção fora de 4:5–1.91:1. Use ✂ Ajustar para escolher o corte (ou caber inteira).`);
     }
+    if (width && width < 1080 && !item.adjusted) warnings.push(`${item.name}: foto pequena (${width} px de largura). O Instagram amplia e perde nitidez; prefira o arquivo original em vez de uma foto do WhatsApp.`);
     if (ratio && placement === "stories" && Math.abs(ratio - 9 / 16) > 0.05) warnings.push(`${item.name}: Stories fica melhor em 9:16; a imagem será ajustada.`);
   } else {
     const maxBytes = placement === "stories" ? LIMITS.storyVideoMaxBytes : LIMITS.videoMaxBytes;
@@ -100,6 +101,7 @@ export async function uploadFile(file, meta, onProgress) {
     xhr.send(file);
   });
   const { data, error } = await supa.from("media").insert({
+    team_id: team?.id,
     url: media_url,
     kind: meta.kind,
     name: file.name,

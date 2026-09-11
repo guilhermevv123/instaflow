@@ -15,6 +15,11 @@ export const supa = configured
 // ---------------------------------------------------------------------------
 // Sessão
 // ---------------------------------------------------------------------------
+// Time em que a pessoa está trabalhando (cada conta nasce no próprio time;
+// convites juntam pessoas a um time). `team` é um binding vivo do módulo.
+export let team = null;
+export let teams = [];
+
 export async function requireAuth(rootRel = "../") {
   if (!configured) {
     showSetupNotice();
@@ -26,10 +31,39 @@ export async function requireAuth(rootRel = "../") {
     location.replace(`${rootRel}entrar/?next=${next}`);
     return new Promise(() => {}); // a página está saindo; nada mais roda
   }
+  const ok = await loadTeamContext();
+  if (!ok) {
+    location.replace(`${rootRel}entrar/?semtime=1`);
+    return new Promise(() => {});
+  }
   return data.session;
 }
 
+async function loadTeamContext() {
+  const { data, error } = await supa.from("team_members")
+    .select("team_id, role, joined_at, teams(id, name, max_accounts, max_posts_month)")
+    .order("joined_at");
+  if (error) { console.error("times:", error.message); return false; }
+  teams = (data || []).map((m) => ({
+    id: m.team_id,
+    role: m.role,
+    name: m.teams?.name || "Time",
+    max_accounts: m.teams?.max_accounts ?? 20,
+    max_posts_month: m.teams?.max_posts_month ?? 300,
+  }));
+  let saved = null;
+  try { saved = localStorage.getItem("if.team"); } catch {}
+  team = teams.find((t) => t.id === saved) || teams[0] || null;
+  return Boolean(team);
+}
+
+export function switchTeam(id) {
+  try { localStorage.setItem("if.team", id); } catch {}
+  location.reload();
+}
+
 export async function signOut(rootRel = "../") {
+  try { localStorage.removeItem("if.team"); } catch {}
   await supa?.auth.signOut();
   location.href = `${rootRel}entrar/`;
 }
@@ -56,6 +90,7 @@ export async function api(path, { method = "GET", body } = {}) {
       Authorization: `Bearer ${token}`,
       apikey: cfg.SUPABASE_ANON_KEY,
       "Content-Type": "application/json",
+      ...(team?.id ? { "X-Team": team.id } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -185,9 +220,15 @@ export function renderNav(active, rootRel, email) {
       ${items.map(([k, label, href]) => `<a href="${rootRel}${href}" class="${k === active ? "on" : ""}" ${k === active ? 'aria-current="page"' : ""} title="${label}">${ico(k)}<span>${label}</span></a>`).join("")}
     </nav>
     <div class="side-foot">
+      <div class="side-team" title="Time atual">
+        ${teams.length > 1
+          ? `<select id="team-switch" class="side-select" aria-label="Trocar de time">${teams.map((t) => `<option value="${t.id}" ${t.id === team?.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>`
+          : `<span class="side-team-name">${esc(team?.name || "")}</span>`}
+      </div>
       <div class="side-user" title="${esc(email || "")}"><span class="av">${esc((email || "?")[0].toUpperCase())}</span><span class="side-email">${esc(email || "")}</span></div>
       <button class="side-link" id="btn-sair" type="button" title="Sair">${ico("sair")}<span>Sair</span></button>
     </div>`;
+  nav.querySelector("#team-switch")?.addEventListener("change", (e) => switchTeam(e.target.value));
 
   const bar = document.createElement("div");
   bar.className = "mbar";

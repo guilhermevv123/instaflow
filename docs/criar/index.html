@@ -70,6 +70,7 @@
 <script type="module">
   import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountHealth, loadAccounts, loadGroups, toast, qs, defaultScheduleValue, PLACEMENT } from "../assets/app.js";
   import { kindOf, probe, validateSet, uploadFile } from "../assets/media.js";
+  import { openCropper, fitsPlacement, suggestRatio } from "../assets/cropper.js";
   const session = await requireAuth("../");
   renderNav("criar", "../", session.user.email);
   const $ = (s) => document.querySelector(s);
@@ -89,7 +90,8 @@
     $("#reels-opts").hidden = state.placement !== "reels";
     $("#collab-field").hidden = state.placement === "stories";
     $("#caption").parentElement.hidden = false;
-    validateMedia(); renderPreview();
+    validateMedia(); renderThumbs(); renderPreview();
+    if (state.items.some((i) => i.kind === "image" && !fitsPlacement(i.width, i.height, state.placement))) toast("Algumas fotos precisam de ajuste para este tipo de post (✂ Ajustar).", "info");
   });
   $("#when").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -121,26 +123,53 @@
     for (const file of files) {
       if (state.items.length >= 10) { toast("Máximo de 10 itens.", "error"); break; }
       const meta = await probe(file);
-      const item = { id: crypto.randomUUID(), name: file.name, type: file.type, size: file.size, kind: meta.kind, width: meta.width, height: meta.height, duration: meta.duration, previewUrl: meta.previewUrl, url: null, progress: 0, error: null };
+      const item = { id: crypto.randomUUID(), name: file.name, type: file.type, size: file.size, kind: meta.kind, width: meta.width, height: meta.height, duration: meta.duration, previewUrl: meta.previewUrl, url: null, progress: 0, error: null,
+        original: meta.kind === "image" ? { src: meta.previewUrl, width: meta.width, height: meta.height, name: file.name } : null, adjusted: false, skip_processing: false };
       state.items.push(item);
       renderThumbs(); validateMedia(); renderPreview();
       if (!item.kind) continue;
       uploadFile(file, meta, (p) => { item.progress = p; renderThumbs(); })
-        .then(({ url }) => { item.url = url; item.progress = 1; renderThumbs(); })
+        .then(({ url }) => { if (!item.adjusted) { item.url = url; item.progress = 1; } renderThumbs(); })
         .catch((e) => { item.error = e.message; renderThumbs(); toast(`${file.name}: ${e.message}`, "error"); });
+      // Fora da proporção do Instagram? Abre o editor na hora, em vez de deixar o Instagram cortar sozinho.
+      if (item.kind === "image" && !fitsPlacement(item.width, item.height, state.placement)) await adjustItem(item);
     }
+  }
+
+  // Editor de enquadramento: gera um JPEG já no tamanho certo e sobe como nova mídia.
+  async function adjustItem(item) {
+    const src = item.original?.src || item.previewUrl;
+    const res = await openCropper({ src, placement: state.placement, name: item.name, ratioKey: item.ratioKey || suggestRatio(item.original?.width || item.width, item.original?.height || item.height, state.placement), mode: item.mode || "cover" });
+    if (!res) return false;
+    if (res.error) { toast(res.error, "error"); return false; }
+    const base = (item.original?.name || item.name || "foto").replace(/\.[a-z0-9]+$/i, "");
+    const file = new File([res.blob], `${base}-${res.ratioKey.replace(":", "x")}.jpg`, { type: "image/jpeg" });
+    item.adjusted = true; item.skip_processing = true; item.ratioKey = res.ratioKey; item.mode = res.mode;
+    item.width = res.width; item.height = res.height; item.type = "image/jpeg"; item.size = file.size; item.name = file.name;
+    item.previewUrl = URL.createObjectURL(res.blob); item.url = null; item.progress = 0; item.error = null;
+    renderThumbs(); validateMedia(); renderPreview();
+    try {
+      const { url } = await uploadFile(file, { kind: "image", width: res.width, height: res.height, duration: null }, (p) => { item.progress = p; renderThumbs(); });
+      item.url = url; item.progress = 1;
+    } catch (e) { item.error = e.message; toast(`${file.name}: ${e.message}`, "error"); }
+    renderThumbs(); validateMedia(); renderPreview();
+    return true;
   }
   function renderThumbs() {
     $("#thumbs").innerHTML = state.items.map((it, i) => `
       <div class="thumb" draggable="true" data-i="${i}">
         ${it.kind === "video" ? `<video src="${it.previewUrl}" muted playsinline></video>` : `<img src="${it.previewUrl}" alt="">`}
-        <span class="tag">${it.kind === "video" ? (it.duration ? Math.round(it.duration) + "s" : "vídeo") : "foto"}</span>
+        <span class="tag">${it.kind === "video" ? (it.duration ? Math.round(it.duration) + "s" : "vídeo") : (it.adjusted ? `ajustada ${it.ratioKey}` : "foto")}</span>
         ${it.error ? `<span class="warnmark">erro</span>` : (!it.url ? `<div class="prog"><i style="width:${Math.round(it.progress * 100)}%"></i></div>` : "")}
+        ${it.kind === "image" && !it.error && !fitsPlacement(it.width, it.height, state.placement) ? `<span class="warnmark">ajustar</span>` : ""}
+        ${it.kind === "image" ? `<button type="button" class="adj" data-adj="${i}" title="Ajustar enquadramento">✂ Ajustar</button>` : ""}
         <button type="button" class="x" data-rm="${i}" aria-label="Remover">×</button>
       </div>`).join("");
     $("#media-count").textContent = state.items.length ? `${state.items.length} item${state.items.length > 1 ? "s" : ""}${state.items.length > 1 ? " · arraste para ordenar" : ""}` : "";
   }
-  $("#thumbs").addEventListener("click", (e) => {
+  $("#thumbs").addEventListener("click", async (e) => {
+    const a = e.target.closest("[data-adj]");
+    if (a) { await adjustItem(state.items[Number(a.dataset.adj)]); return; }
     const b = e.target.closest("[data-rm]"); if (!b) return;
     state.items.splice(Number(b.dataset.rm), 1); renderThumbs(); validateMedia(); renderPreview();
   });
@@ -154,6 +183,11 @@
   });
   function validateMedia() {
     const { errors, warnings } = validateSet(state.items, state.placement);
+    const imgs = state.items.filter((i) => i.kind === "image" && i.width && i.height);
+    if (state.placement === "timeline" && imgs.length > 1) {
+      const r0 = imgs[0].width / imgs[0].height;
+      if (imgs.some((i) => Math.abs(i.width / i.height - r0) > 0.02)) warnings.push("As fotos do carrossel têm proporções diferentes; o Instagram corta todas para a proporção da primeira. Use ✂ Ajustar com a mesma proporção em todas.");
+    }
     $("#media-msgs").innerHTML = [...errors.map((m) => `<div class="error-box">${esc(m)}</div>`), ...warnings.map((m) => `<div class="warn-box">${esc(m)}</div>`)].join("");
     return errors;
   }
@@ -177,7 +211,8 @@
   function addFromLibrary(list) {
     for (const m of list) {
       if (state.items.length >= 10) break;
-      state.items.push({ id: crypto.randomUUID(), name: m.name || "mídia", type: m.mime, size: m.size_bytes || 0, kind: m.kind, width: m.width, height: m.height, duration: m.duration_s ? Number(m.duration_s) : null, previewUrl: m.url, url: m.url, progress: 1 });
+      state.items.push({ id: crypto.randomUUID(), name: m.name || "mídia", type: m.mime, size: m.size_bytes || 0, kind: m.kind, width: m.width, height: m.height, duration: m.duration_s ? Number(m.duration_s) : null, previewUrl: m.url, url: m.url, progress: 1,
+        original: m.kind === "image" ? { src: m.url, width: m.width, height: m.height, name: m.name } : null, adjusted: false, skip_processing: Boolean(m.skip_processing) });
     }
     renderThumbs(); validateMedia(); renderPreview();
   }
@@ -271,6 +306,7 @@
     const errors = validateMedia();
     if (state.items.some((i) => !i.url && !i.error)) errors.push("Aguarde o upload terminar.");
     if (state.items.some((i) => i.error)) errors.push("Remova as mídias com erro de upload.");
+    if (state.placement === "timeline") for (const i of state.items) if (i.kind === "image" && !fitsPlacement(i.width, i.height, "timeline")) errors.push(`${i.name}: fora da proporção do Feed (4:5 a 1.91:1). Clique em ✂ Ajustar na foto.`);
     if (!cap.value.trim() && state.placement !== "stories") errors.push("Escreva uma legenda.");
     if (!state.selected.size) errors.push("Escolha pelo menos uma conta.");
     const scheduled_at = state.when === "now" ? null : fmt.fromLocalInput($("#scheduled_at").value);
@@ -286,7 +322,7 @@
       title: $("#title").value.trim() || null,
       caption: cap.value.trim(),
       placement: state.placement,
-      media: state.items.map((i) => ({ url: i.url, kind: i.kind })),
+      media: state.items.map((i) => ({ url: i.url, kind: i.kind, skip_processing: i.skip_processing || undefined })),
       account_ids: [...state.selected],
       scheduled_at,
       caption_overrides: overrides,

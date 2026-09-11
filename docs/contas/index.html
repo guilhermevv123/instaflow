@@ -51,7 +51,21 @@
   </form></dialog>
 </main>
 <script type="module">
-  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountHealth, loadAccounts, loadGroups, toast, daysUntil } from "../assets/app.js";
+  import { supa, requireAuth, api, renderNav, fmt, esc, avatar, accountHealth, loadAccounts, loadGroups, toast, daysUntil, team } from "../assets/app.js";
+  // Voltou da autorização do Instagram dentro da janela pop-up: avisa a página
+  // que abriu (seja ela local, no GitHub Pages ou num domínio próprio) e fecha.
+  // Assim a sessão de quem clicou nunca se perde por causa do endereço de retorno.
+  {
+    const q = new URLSearchParams(location.search);
+    if (q.has("isSuccess") && window.opener && window.opener !== window) {
+      try {
+        window.opener.postMessage({ type: "instaflow:connected", ok: q.get("isSuccess") === "true", n: (q.get("accountIds") || "").split(",").filter(Boolean).length, error: q.get("error") || "" }, "*");
+      } catch {}
+      document.body.innerHTML = '<main class="shell narrow"><div class="card" style="text-align:center"><h1 class="h1">Pronto!</h1><p class="muted">Pode fechar esta janela e voltar para o InstaFlow.</p></div></main>';
+      setTimeout(() => window.close(), 400);
+      await new Promise(() => {});
+    }
+  }
   const session = await requireAuth("../");
   renderNav("contas", "../", session.user.email);
   const $ = (s) => document.querySelector(s);
@@ -70,11 +84,34 @@
     if (ok) await syncNow(false);
   }
 
-  $("#connect").addEventListener("click", async () => {
+  // Conectar abre o Instagram numa janela à parte. Quando ela volta, manda um
+  // aviso para esta página, que sincroniza. Se o navegador bloquear pop-ups,
+  // segue na mesma aba como antes.
+  let popup = null, popupTimer = null;
+  async function startConnect(reconnect = false) {
     const b = $("#connect"); b.disabled = true;
-    try { const { url } = await api("/accounts/connect", { method: "POST", body: {} }); location.href = url; }
-    catch (e) { toast(e.message, "error"); b.disabled = false; }
+    try {
+      const { url } = await api("/accounts/connect", { method: "POST", body: { reconnect } });
+      const w = window.open(url, "instaflow_connect", "popup=yes,width=620,height=780");
+      if (!w) { location.href = url; return; }
+      popup = w;
+      $("#notice").innerHTML = `<div class="warn-box">Autorize na janela que abriu. Quando terminar, a conta aparece aqui sozinha.</div>`;
+      clearInterval(popupTimer);
+      popupTimer = setInterval(async () => {
+        if (popup && popup.closed) { clearInterval(popupTimer); popup = null; b.disabled = false; await syncNow(false); }
+      }, 800);
+    } catch (e) { toast(e.message, "error"); b.disabled = false; }
+  }
+  window.addEventListener("message", async (e) => {
+    const d = e.data;
+    if (!d || d.type !== "instaflow:connected") return;
+    clearInterval(popupTimer); try { popup?.close(); } catch {} popup = null; $("#connect").disabled = false;
+    $("#notice").innerHTML = d.ok
+      ? `<div class="ok-box">Conta conectada com sucesso${d.n ? ` (${d.n})` : ""}. Já dá para agendar.</div>`
+      : `<div class="error-box">Não foi possível conectar. ${esc(String(d.error || "").split("|").join(" · ")) || "Confira se a conta é Profissional e tente de novo."}</div>`;
+    await syncNow(false);
   });
+  $("#connect").addEventListener("click", () => startConnect(false));
   $("#sync").addEventListener("click", () => syncNow(true));
   async function syncNow(announce) {
     const b = $("#sync"); b.disabled = true; b.innerHTML = `<span class="spinner"></span> Sincronizando…`;
@@ -118,7 +155,7 @@
         if (v === null) return;
         const { error } = await supa.from("accounts").update({ label: v.trim() || null }).eq("id", a.id); if (error) throw error;
       } else if (t.dataset.reconnect) {
-        const { url } = await api("/accounts/connect", { method: "POST", body: {} }); location.href = url; return;
+        await startConnect(true); return;
       } else if (t.dataset.disconnect) {
         if (!confirm("Desconectar esta conta? Publicações agendadas para ela vão falhar até reconectar.")) return;
         await api(`/accounts/${t.dataset.disconnect}/disconnect`, { method: "POST", body: {} }); toast("Conta desconectada.", "ok");
@@ -151,7 +188,7 @@
     try {
       let gid = editing?.id;
       if (gid) { const { error } = await supa.from("account_groups").update({ name }).eq("id", gid); if (error) throw error; }
-      else { const { data, error } = await supa.from("account_groups").insert({ name }).select("id").single(); if (error) throw error; gid = data.id; }
+      else { const { data, error } = await supa.from("account_groups").insert({ name, team_id: team.id }).select("id").single(); if (error) throw error; gid = data.id; }
       await supa.from("account_group_members").delete().eq("group_id", gid);
       if (ids.length) { const { error } = await supa.from("account_group_members").insert(ids.map((account_id) => ({ group_id: gid, account_id }))); if (error) throw error; }
       dlg.close(); toast("Grupo salvo.", "ok"); await load();

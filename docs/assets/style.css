@@ -61,6 +61,10 @@ header.top .brand-logo { height: 34px; }
 .side-nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
 .side-nav a.on::before { content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--brand-grad); }
 .side-foot { display: grid; gap: 2px; padding-top: 10px; border-top: 1px solid var(--line); }
+.side-team { padding: 4px 8px 8px; }
+.side-team-name { display: block; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: 600 .8rem var(--body); }
+html.side-min .side-team { display: none; }
 .side-user { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 6px 8px; }
 .side-user .av { background: var(--brand-grad); color: var(--accent-ink); }
 .side-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: .82rem; }
@@ -241,3 +245,18 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 .login-logo .brand-logo { height: 64px; }
 .spinner { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* editor de enquadramento */
+.crop-dlg { max-width: min(980px, 96vw); }
+.crop-body { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, .8fr); gap: 18px; }
+.crop-stage { position: relative; display: grid; place-items: center; min-height: 340px; height: min(62vh, 560px); background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--bg) 0 50%) 0 0 / 20px 20px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; touch-action: none; }
+.crop-stage canvas { display: block; box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 14px 40px -12px rgba(0,0,0,.6); cursor: grab; background: var(--surface); }
+.crop-stage canvas:active { cursor: grabbing; }
+.crop-hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,.55); color: #fff; font-size: .74rem; pointer-events: none; }
+.crop-side { display: flex; flex-direction: column; gap: 14px; }
+.seg.wrap { flex-wrap: wrap; }
+.seg.wrap button { flex: 1 1 auto; }
+#crop-zoom { width: 100%; accent-color: var(--accent); }
+.thumb .adj { position: absolute; left: 6px; bottom: 6px; padding: 3px 8px; border: 0; border-radius: 6px; background: rgba(0,0,0,.65); color: #fff; font: 700 .68rem var(--body); cursor: pointer; }
+.thumb .adj:hover { background: var(--accent); color: var(--accent-ink); }
+@media (max-width: 760px) { .crop-body { grid-template-columns: 1fr; } .crop-stage { height: 52vh; min-height: 260px; } }

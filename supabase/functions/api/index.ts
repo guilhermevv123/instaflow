@@ -1,10 +1,12 @@
 // InstaFlow · camada do meio entre o painel e o Post for Me.
-// Guarda a chave da API, valida quem chama e espelha os dados no banco.
+// Guarda a chave da API, valida quem chama, resolve o time (X-Team) e espelha
+// os dados no banco — sempre dentro do time de quem chamou.
 //
 // Rotas (todas sob /functions/v1/api):
 //   GET    /health                    testa a chave do Post for Me
-//   GET    /accounts/sync             puxa as contas do Post for Me e devolve a lista
-//   POST   /accounts/connect          gera o link "Conectar Instagram"
+//   GET    /team                      time atual, papel, limites e uso do mês
+//   GET    /accounts/sync             puxa as contas do time no Post for Me e devolve a lista
+//   POST   /accounts/connect          gera o link "Conectar Instagram" (marcado com o time)
 //   POST   /accounts/:id/disconnect   desconecta no Post for Me
 //   DELETE /accounts/:id              remove (ou arquiva, se já tem histórico)
 //   POST   /media/upload-url          URL assinada para subir um arquivo
@@ -13,15 +15,14 @@
 //   DELETE /posts/:id                 cancela (só enquanto agendada)
 //   POST   /posts/:id/sync            confere status/resultados no Post for Me
 //   POST   /posts/:id/retry           reenvia agora para as contas que falharam
-//   POST   /sync                      confere todas as publicações pendentes
+//   POST   /sync                      confere todas as publicações pendentes do time
 //   GET    /usage                     uso do mês e estado do webhook
-//   POST   /webhooks/setup            registra o webhook no Post for Me
+//   POST   /webhooks/setup            registra o webhook no Post for Me (global)
 
 import { friendlyError } from "../_shared/friendly.ts";
 import { listData, pfm, PfmError, pfmListAll, type PfmAccount, type PfmPost, type PfmResult, type PfmWebhook } from "../_shared/pfm.ts";
-import { background, type Caller, corsHeaders, HttpError, json, readJson, requireMember, serviceClient, SUPABASE_URL } from "../_shared/util.ts";
+import { background, type Caller, corsHeaders, HttpError, json, readJson, requireMember, serviceClient, SUPABASE_URL, teamOf, teamTag } from "../_shared/util.ts";
 
-const PLAN_MONTHLY_LIMIT = 1000; // plano de US$ 10 do Post for Me: posts bem-sucedidos por mês (conta por conta)
 const WEBHOOK_EVENTS = [
   "social.post.result.created",
   "social.post.updated",
@@ -31,11 +32,18 @@ const WEBHOOK_EVENTS = [
 
 type Db = ReturnType<typeof serviceClient>;
 
+interface MediaInput {
+  url: string;
+  kind: "image" | "video";
+  thumbnail_url?: string | null;
+  skip_processing?: boolean | null; // já ajustada no painel: o Post for Me não mexe
+}
+
 interface PostInput {
   title?: string | null;
   caption: string;
   placement?: "timeline" | "reels" | "stories";
-  media: Array<{ url: string; kind: "image" | "video"; thumbnail_url?: string | null }>;
+  media: MediaInput[];
   account_ids: string[];
   scheduled_at?: string | null;
   caption_overrides?: Record<string, string>;
@@ -52,19 +60,20 @@ Deno.serve(async (req) => {
   try {
     const caller = await requireMember(req);
 
-    if (req.method === "GET" && path === "/health") return json(req, await health());
-    if (req.method === "GET" && path === "/accounts/sync") return json(req, await syncAccounts(db));
-    if (req.method === "POST" && path === "/accounts/connect") return json(req, await connectUrl(await readJson(req).catch(() => ({}))));
-    if (req.method === "POST" && seg[0] === "accounts" && seg[2] === "disconnect") return json(req, await disconnectAccount(db, seg[1]));
-    if (req.method === "DELETE" && seg[0] === "accounts" && seg.length === 2) return json(req, await removeAccount(db, seg[1]));
+    if (req.method === "GET" && path === "/health") return json(req, await health(db, caller));
+    if (req.method === "GET" && path === "/team") return json(req, await teamInfo(db, caller));
+    if (req.method === "GET" && path === "/accounts/sync") return json(req, await syncAccounts(db, caller));
+    if (req.method === "POST" && path === "/accounts/connect") return json(req, await connectUrl(db, caller, await readJson<{ reconnect?: boolean }>(req).catch(() => ({}))));
+    if (req.method === "POST" && seg[0] === "accounts" && seg[2] === "disconnect") return json(req, await disconnectAccount(db, caller, seg[1]));
+    if (req.method === "DELETE" && seg[0] === "accounts" && seg.length === 2) return json(req, await removeAccount(db, caller, seg[1]));
     if (req.method === "POST" && path === "/media/upload-url") return json(req, await pfm("/media/create-upload-url", { method: "POST" }));
     if (req.method === "POST" && path === "/posts") return json(req, await createPost(db, caller, await readJson<PostInput>(req)), 201);
-    if (req.method === "PUT" && seg[0] === "posts" && seg.length === 2) return json(req, await updatePost(db, seg[1], await readJson<PostInput>(req)));
-    if (req.method === "DELETE" && seg[0] === "posts" && seg.length === 2) return json(req, await cancelPost(db, seg[1]));
-    if (req.method === "POST" && seg[0] === "posts" && seg[2] === "sync") return json(req, await syncPost(db, seg[1]));
+    if (req.method === "PUT" && seg[0] === "posts" && seg.length === 2) return json(req, await updatePost(db, caller, seg[1], await readJson<PostInput>(req)));
+    if (req.method === "DELETE" && seg[0] === "posts" && seg.length === 2) return json(req, await cancelPost(db, caller, seg[1]));
+    if (req.method === "POST" && seg[0] === "posts" && seg[2] === "sync") return json(req, await syncPost(db, caller, seg[1]));
     if (req.method === "POST" && seg[0] === "posts" && seg[2] === "retry") return json(req, await retryPost(db, caller, seg[1]), 201);
-    if (req.method === "POST" && path === "/sync") return json(req, await syncPending(db));
-    if (req.method === "GET" && path === "/usage") return json(req, await usage(db));
+    if (req.method === "POST" && path === "/sync") return json(req, await syncPending(db, caller));
+    if (req.method === "GET" && path === "/usage") return json(req, await usage(db, caller));
     if (req.method === "POST" && path === "/webhooks/setup") return json(req, await ensureWebhook(db, true));
 
     throw new HttpError(404, `Rota não encontrada: ${req.method} ${path}`);
@@ -80,18 +89,40 @@ Deno.serve(async (req) => {
 });
 
 // ---------------------------------------------------------------------------
-// Saúde e contas
+// Saúde, time e contas
 // ---------------------------------------------------------------------------
-async function health() {
-  const res = await pfm("/social-accounts", { query: { limit: "1" } });
-  const meta = (res as { meta?: { total?: number } }).meta;
-  return { ok: true, accounts_total: meta?.total ?? listData(res).length };
+async function health(db: Db, caller: Caller) {
+  await pfm("/social-accounts", { query: { limit: "1" } }); // confere a chave
+  const { count } = await db.from("accounts").select("id", { count: "exact", head: true }).eq("team_id", caller.teamId).eq("archived", false);
+  return { ok: true, accounts_total: count ?? 0, team: caller.teamName };
 }
 
-async function syncAccounts(db: Db) {
-  const all = await pfmListAll<PfmAccount>("/social-accounts", { platform: "instagram" });
-  const rows = all.map((a) => ({
+async function monthUsage(db: Db, teamId: string): Promise<number> {
+  const { data, error } = await db.rpc("team_month_usage", { p_team: teamId });
+  if (error) throw new HttpError(500, error.message);
+  return Number(data ?? 0);
+}
+
+async function teamInfo(db: Db, caller: Caller) {
+  const [{ count }, used] = await Promise.all([
+    db.from("accounts").select("id", { count: "exact", head: true }).eq("team_id", caller.teamId).eq("archived", false),
+    monthUsage(db, caller.teamId),
+  ]);
+  return {
+    id: caller.teamId,
+    name: caller.teamName,
+    role: caller.role,
+    accounts: count ?? 0,
+    max_accounts: caller.maxAccounts,
+    month_used: used,
+    max_posts_month: caller.maxPostsMonth,
+  };
+}
+
+function accountRow(a: PfmAccount, teamId: string) {
+  return {
     id: a.id,
+    team_id: teamId,
     platform: a.platform,
     username: a.username,
     user_id: a.user_id,
@@ -101,43 +132,65 @@ async function syncAccounts(db: Db) {
     access_token_expires_at: a.access_token_expires_at || null,
     metadata: a.metadata ?? null,
     synced_at: new Date().toISOString(),
-  }));
+  };
+}
+
+// Todas as contas do Post for Me são do mesmo projeto; só entram as do time:
+// as que já estão nele ou as marcadas com o external_id do time.
+async function syncAccounts(db: Db, caller: Caller) {
+  const all = await pfmListAll<PfmAccount>("/social-accounts", { platform: "instagram" });
+  const { data: mine } = await db.from("accounts").select("id").eq("team_id", caller.teamId);
+  const mineIds = new Set((mine ?? []).map((a) => a.id));
+  const ours = all.filter((a) => mineIds.has(a.id) || teamOf(a.external_id) === caller.teamId);
+  const rows = ours.map((a) => accountRow(a, caller.teamId));
   if (rows.length) {
     const { error } = await db.from("accounts").upsert(rows, { onConflict: "id" });
     if (error) throw new HttpError(500, error.message);
   }
-  // contas que sumiram do Post for Me ficam como desconectadas
-  const ids = rows.map((r) => r.id);
-  if (ids.length) {
-    await db.from("accounts").update({ status: "disconnected" }).not("id", "in", `(${ids.map((i) => `"${i}"`).join(",")})`).eq("status", "connected");
-  } else {
-    await db.from("accounts").update({ status: "disconnected" }).eq("status", "connected");
-  }
+  // contas do time que sumiram do Post for Me ficam como desconectadas
+  let q = db.from("accounts").update({ status: "disconnected" }).eq("team_id", caller.teamId).eq("status", "connected");
+  if (rows.length) q = q.not("id", "in", `(${rows.map((r) => `"${r.id}"`).join(",")})`);
+  await q;
   background(ensureWebhook(db, false).catch((e) => console.error("webhook", e)));
-  const { data } = await db.from("accounts").select("*").order("username");
+  const { data } = await db.from("accounts").select("*").eq("team_id", caller.teamId).order("username");
   return { accounts: data ?? [], synced: rows.length };
 }
 
-async function connectUrl(body: { external_id?: string }) {
+async function connectUrl(db: Db, caller: Caller, body: { reconnect?: boolean }) {
+  if (!body.reconnect) {
+    const { count } = await db.from("accounts").select("id", { count: "exact", head: true }).eq("team_id", caller.teamId).eq("archived", false);
+    if ((count ?? 0) >= caller.maxAccounts) {
+      throw new HttpError(400, `Este time chegou ao limite de ${caller.maxAccounts} contas. Remova uma conta ou peça para aumentar o limite.`);
+    }
+  }
   const res = await pfm<{ url: string; platform: string }>("/social-accounts/auth-url", {
     method: "POST",
     body: {
       platform: "instagram",
       platform_data: { instagram: { connection_type: "instagram" } },
-      external_id: body.external_id || undefined,
+      external_id: teamTag(caller.teamId),
       permissions: ["posts"],
     },
   });
   return { url: res.url };
 }
 
-async function disconnectAccount(db: Db, id: string) {
+async function accountOf(db: Db, caller: Caller, id: string) {
+  const { data, error } = await db.from("accounts").select("id, team_id").eq("id", id).eq("team_id", caller.teamId).maybeSingle();
+  if (error) throw new HttpError(500, error.message);
+  if (!data) throw new HttpError(404, "Esta conta não está no seu time.");
+  return data;
+}
+
+async function disconnectAccount(db: Db, caller: Caller, id: string) {
+  await accountOf(db, caller, id);
   await pfm(`/social-accounts/${encodeURIComponent(id)}/disconnect`, { method: "POST" });
   await db.from("accounts").update({ status: "disconnected" }).eq("id", id);
   return { ok: true };
 }
 
-async function removeAccount(db: Db, id: string) {
+async function removeAccount(db: Db, caller: Caller, id: string) {
+  await accountOf(db, caller, id);
   const { count } = await db.from("post_targets").select("post_id", { count: "exact", head: true }).eq("account_id", id);
   try {
     await pfm(`/social-accounts/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -181,15 +234,23 @@ function validatePost(input: PostInput) {
   return placement as "timeline" | "reels" | "stories";
 }
 
-async function loadAccounts(db: Db, ids: string[]) {
-  const { data, error } = await db.from("accounts").select("id, username, status, archived").in("id", ids);
+async function loadAccounts(db: Db, caller: Caller, ids: string[]) {
+  const unique = [...new Set(ids)];
+  const { data, error } = await db.from("accounts").select("id, username, status, archived").eq("team_id", caller.teamId).in("id", unique);
   if (error) throw new HttpError(500, error.message);
   const found = new Map((data ?? []).map((a) => [a.id, a]));
-  const missing = ids.filter((id) => !found.has(id));
-  if (missing.length) throw new HttpError(400, "Uma das contas escolhidas não existe mais. Sincronize as contas.");
+  const missing = unique.filter((id) => !found.has(id));
+  if (missing.length) throw new HttpError(400, "Uma das contas escolhidas não está no seu time. Sincronize as contas.");
   const off = (data ?? []).filter((a) => a.status !== "connected" || a.archived).map((a) => "@" + (a.username ?? a.id));
   if (off.length) throw new HttpError(400, `Estas contas precisam ser reconectadas antes: ${off.join(", ")}.`);
   return data ?? [];
+}
+
+async function checkMonthLimit(db: Db, caller: Caller, adding: number) {
+  const used = await monthUsage(db, caller.teamId);
+  if (used + adding > caller.maxPostsMonth) {
+    throw new HttpError(400, `Limite do mês do time: ${caller.maxPostsMonth} publicações (conta a conta). Já usadas ou agendadas: ${used}. Esta publicação precisaria de mais ${adding}.`);
+  }
 }
 
 function buildPfmBody(input: PostInput, placement: string, externalId: string) {
@@ -206,24 +267,35 @@ function buildPfmBody(input: PostInput, placement: string, externalId: string) {
   return {
     caption,
     scheduled_at: input.scheduled_at || null,
-    social_accounts: input.account_ids,
-    media: input.media.map((m) => ({ url: m.url, thumbnail_url: m.thumbnail_url || undefined })),
+    social_accounts: [...new Set(input.account_ids)],
+    media: input.media.map((m) => ({
+      url: m.url,
+      thumbnail_url: m.thumbnail_url || undefined,
+      skip_processing: m.skip_processing ? true : undefined,
+    })),
     platform_configurations: { instagram },
     account_configurations: accountConfigs.length ? accountConfigs : undefined,
     external_id: externalId,
   };
 }
 
+function cleanMedia(media: MediaInput[]): MediaInput[] {
+  return media.map((m) => ({ url: m.url, kind: m.kind, thumbnail_url: m.thumbnail_url ?? null, skip_processing: m.skip_processing ? true : null }));
+}
+
 async function createPost(db: Db, caller: Caller, input: PostInput) {
   const placement = validatePost(input);
-  await loadAccounts(db, input.account_ids);
+  input.account_ids = [...new Set(input.account_ids)];
+  await loadAccounts(db, caller, input.account_ids);
+  await checkMonthLimit(db, caller, input.account_ids.length);
   const scheduled = input.scheduled_at ? new Date(input.scheduled_at).toISOString() : null;
 
   const { data: post, error } = await db.from("posts").insert({
+    team_id: caller.teamId,
     title: input.title?.trim() || null,
     caption: input.caption?.trim() || "",
     placement,
-    media: input.media,
+    media: cleanMedia(input.media),
     options: input.options ?? {},
     caption_overrides: input.caption_overrides ?? {},
     scheduled_at: scheduled,
@@ -245,20 +317,23 @@ async function createPost(db: Db, caller: Caller, input: PostInput) {
   return { id: post.id, pfm_post_id: pfmPost.id, status: pfmPost.status, scheduled_at: scheduled };
 }
 
-async function getPost(db: Db, id: string) {
-  const { data, error } = await db.from("posts").select("*").eq("id", id).maybeSingle();
+async function getPost(db: Db, caller: Caller, id: string) {
+  const { data, error } = await db.from("posts").select("*").eq("id", id).eq("team_id", caller.teamId).maybeSingle();
   if (error) throw new HttpError(500, error.message);
-  if (!data) throw new HttpError(404, "Publicação não encontrada.");
+  if (!data) throw new HttpError(404, "Publicação não encontrada neste time.");
   return data;
 }
 
-async function updatePost(db: Db, id: string, input: PostInput) {
-  const post = await getPost(db, id);
+async function updatePost(db: Db, caller: Caller, id: string, input: PostInput) {
+  const post = await getPost(db, caller, id);
   if (!["scheduled", "draft"].includes(post.status)) throw new HttpError(400, "Só dá para editar uma publicação que ainda está agendada.");
   const placement = validatePost(input);
-  await loadAccounts(db, input.account_ids);
+  input.account_ids = [...new Set(input.account_ids)];
+  await loadAccounts(db, caller, input.account_ids);
   const scheduled = input.scheduled_at ? new Date(input.scheduled_at).toISOString() : null;
   if (!scheduled) throw new HttpError(400, "Para publicar agora, cancele esta e crie uma nova publicação.");
+  const { count: before } = await db.from("post_targets").select("post_id", { count: "exact", head: true }).eq("post_id", id);
+  if (input.account_ids.length > (before ?? 0)) await checkMonthLimit(db, caller, input.account_ids.length - (before ?? 0));
 
   const pfmPost = await pfm<PfmPost>(`/social-posts/${encodeURIComponent(post.pfm_post_id)}`, {
     method: "PUT",
@@ -268,7 +343,7 @@ async function updatePost(db: Db, id: string, input: PostInput) {
     title: input.title?.trim() || null,
     caption: input.caption?.trim() || "",
     placement,
-    media: input.media,
+    media: cleanMedia(input.media),
     options: input.options ?? {},
     caption_overrides: input.caption_overrides ?? {},
     scheduled_at: scheduled,
@@ -279,8 +354,8 @@ async function updatePost(db: Db, id: string, input: PostInput) {
   return { id, status: pfmPost.status };
 }
 
-async function cancelPost(db: Db, id: string) {
-  const post = await getPost(db, id);
+async function cancelPost(db: Db, caller: Caller, id: string) {
+  const post = await getPost(db, caller, id);
   if (!["scheduled", "draft"].includes(post.status)) throw new HttpError(400, "Esta publicação já está em andamento e não pode mais ser cancelada.");
   if (post.pfm_post_id) {
     try {
@@ -295,24 +370,23 @@ async function cancelPost(db: Db, id: string) {
 }
 
 // Confere no Post for Me o status do post e o resultado em cada conta.
-async function syncPost(db: Db, id: string) {
-  const post = await getPost(db, id);
+async function syncPost(db: Db, caller: Caller, id: string) {
+  const post = await getPost(db, caller, id);
   if (!post.pfm_post_id) return { status: post.status, results: 0 };
   const remote = await pfm<PfmPost>(`/social-posts/${encodeURIComponent(post.pfm_post_id)}`);
   const results = await pfmListAll<PfmResult>("/social-post-results", { post_id: post.pfm_post_id });
   for (const r of results) await applyResult(db, r);
   const { data: targets } = await db.from("post_targets").select("status").eq("post_id", id);
   const pending = (targets ?? []).filter((t) => t.status === "pending").length;
-  const status = remote.status === "processed" && pending > 0 && results.length === 0
-    ? "processed"
-    : remote.status;
+  const status = remote.status === "processed" && pending > 0 && results.length === 0 ? "processed" : remote.status;
   await db.from("posts").update({ status }).eq("id", id);
   return { status, results: results.length, pending };
 }
 
-async function syncPending(db: Db) {
+async function syncPending(db: Db, caller: Caller) {
   const { data } = await db.from("posts")
     .select("id, scheduled_at")
+    .eq("team_id", caller.teamId)
     .in("status", ["scheduled", "processing"])
     .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
     .order("scheduled_at", { ascending: true })
@@ -320,7 +394,7 @@ async function syncPending(db: Db) {
   const out: Array<{ id: string; status: string }> = [];
   for (const p of data ?? []) {
     try {
-      const r = await syncPost(db, p.id);
+      const r = await syncPost(db, caller, p.id);
       out.push({ id: p.id, status: r.status });
     } catch (e) {
       console.error("sync", p.id, (e as Error).message);
@@ -330,7 +404,7 @@ async function syncPending(db: Db) {
 }
 
 async function retryPost(db: Db, caller: Caller, id: string) {
-  const post = await getPost(db, id);
+  const post = await getPost(db, caller, id);
   const { data: failed } = await db.from("post_targets").select("account_id").eq("post_id", id).eq("status", "failed");
   const ids = (failed ?? []).map((t) => t.account_id);
   if (!ids.length) throw new HttpError(400, "Nenhuma conta falhou nesta publicação.");
@@ -369,17 +443,22 @@ export async function applyResult(db: Db, r: PfmResult) {
 // ---------------------------------------------------------------------------
 // Uso e webhook
 // ---------------------------------------------------------------------------
-async function usage(db: Db) {
+async function usage(db: Db, caller: Caller) {
   const start = new Date();
   start.setUTCDate(1);
   start.setUTCHours(0, 0, 0, 0);
-  const { count } = await db.from("post_targets").select("post_id", { count: "exact", head: true })
-    .eq("status", "published").gte("published_at", start.toISOString());
-  const { data: wh } = await db.from("app_settings").select("value, updated_at").eq("key", "pfm_webhook").maybeSingle();
-  const { data: last } = await db.from("webhook_events").select("received_at, event_type").order("id", { ascending: false }).limit(1).maybeSingle();
+  const [{ count }, reserved, { data: wh }, { data: last }] = await Promise.all([
+    db.from("post_targets").select("post_id, posts!inner(team_id)", { count: "exact", head: true })
+      .eq("posts.team_id", caller.teamId).eq("status", "published").gte("published_at", start.toISOString()),
+    monthUsage(db, caller.teamId),
+    db.from("app_settings").select("value, updated_at").eq("key", "pfm_webhook").maybeSingle(),
+    db.from("webhook_events").select("received_at, event_type").order("id", { ascending: false }).limit(1).maybeSingle(),
+  ]);
   return {
+    team: { id: caller.teamId, name: caller.teamName, role: caller.role, max_accounts: caller.maxAccounts },
     month_published: count ?? 0,
-    month_limit: PLAN_MONTHLY_LIMIT,
+    month_reserved: reserved,
+    month_limit: caller.maxPostsMonth,
     webhook: wh ? { id: (wh.value as { id: string }).id, url: (wh.value as { url: string }).url, since: wh.updated_at } : null,
     last_event: last ?? null,
   };

@@ -19,10 +19,19 @@ scripts/setup.sh       liga tudo (link, db push, secrets, deploy, admin, config)
 scripts/publish-site.sh  cria o repo público e ativa o GitHub Pages
 ```
 
+## Times (multi-tenant)
+
+- Toda conta nova ganha o **próprio time** (gatilho `handle_new_user` em `auth.users`). Se o e-mail tinha convite pendente, entra no time que convidou em vez de criar um.
+- `teams`, `team_members` (owner/admin/editor), `team_invites`. Contas, grupos, mídia e posts têm `team_id`; o RLS filtra por `my_team_ids()`.
+- Convites/remoção/renomear via RPC (`team_invite`, `team_remove_member`, `team_cancel_invite`, `team_rename`) — só admins do time. O dono não pode ser removido.
+- O painel manda `X-Team: <id>` para a função `api`; sem o cabeçalho, vale o primeiro time. Trocar de time: seletor no menu lateral (quando há mais de um).
+- Limites por time (`max_accounts` 20, `max_posts_month` 300, conta a conta) — a função `api` recusa acima disso. Ajuste no banco se precisar.
+- Post for Me é um projeto só para todos os times: o link "Conectar Instagram" leva `external_id = ifteam_<team_id>_xxxx`, e é por isso que o webhook e o `sync` sabem de que time é cada conta.
+
 ## Como funciona
 
-1. **Contas** → "Conectar Instagram" abre a autorização oficial do Instagram (via app do Post for Me). A conta precisa ser Profissional. Nenhuma senha é guardada.
-2. **Criar** → tipo (Feed, Reels, Stories), mídia (sobe direto para o Post for Me), legenda (com variação por conta), contas/grupos, data e hora (Bahia).
+1. **Contas** → "Conectar Instagram" abre a autorização oficial numa janela pop-up; ao voltar, a janela avisa a página que abriu (`postMessage`) e fecha — a sessão de quem clicou nunca se perde, seja no local, no Pages ou num domínio próprio. Sem pop-up, segue na mesma aba.
+2. **Criar** → tipo (Feed, Reels, Stories), mídia (sobe direto para o Post for Me), legenda (com variação por conta), contas/grupos, data e hora (Bahia). Foto fora de 4:5–1.91:1 abre o **✂ Ajustar** (`assets/cropper.js`): proporção, zoom/arrastar (Cortar) ou Caber inteira com fundo (cor da foto, desfocado, branco, preto). Sai JPEG 92% com até 1440 px de largura e vai com `skip_processing: true`. Foto com menos de 1080 px de largura recebe aviso de nitidez.
 3. A função `api` cria **1 post no Post for Me com N contas** e grava `posts` + `post_targets` (uma linha por conta).
 4. No horário, o Post for Me publica (checa a cada 2 min) e chama `pfm-webhook` com o resultado de cada conta. A **Fila** mostra publicado/falhou/link do post; "Atualizar status" confere direto na API se algum aviso se perder.
 5. Falhou em 2 de 20? "Reenviar agora para as que falharam" cria um reenvio só para elas.
@@ -47,7 +56,7 @@ supabase secrets set INSTAFLOW_ALLOWED_ORIGINS=https://<usuario>.github.io
 #    https://<usuario>.github.io/instaflow/contas/
 ```
 
-Depois: entre com o e-mail admin ("Primeiro acesso" cria a senha; se o e-mail já existir no Auth do projeto, use a senha que já tem ou "Esqueci a senha"), vá em **Config** → "Testar conexão" e "Registrar avisos", e em **Contas** → "Conectar Instagram".
+Depois: "Criar conta" na tela de login (entra direto, com o próprio time), **Config** → "Testar conexão" e "Registrar avisos", e **Contas** → "Conectar Instagram".
 
 ## Onde está ligado hoje (10/09/2026)
 
@@ -79,7 +88,7 @@ docker run -d -p 8080:80 --name instaflow instaflow   # http://localhost:8080/
 ## Segurança
 
 - A chave do Post for Me só existe nos secrets do Supabase; o navegador nunca a vê.
-- Toda tabela tem RLS: só e-mails em `allowed_users` leem/escrevem; `app_settings` e `webhook_events` só a service role.
+- Toda tabela tem RLS por time (`team_id in my_team_ids()`); `app_settings` e `webhook_events` só a service role.
 - O webhook confere o segredo do Post for Me (cabeçalho `Post-For-Me-Webhook-Secret`) antes de aceitar.
 - Nunca rode `supabase config push` neste projeto (sobrescreve o Auth do painel).
 

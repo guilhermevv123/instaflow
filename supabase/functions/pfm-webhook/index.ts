@@ -4,7 +4,7 @@
 
 import { friendlyError } from "../_shared/friendly.ts";
 import type { PfmAccount, PfmPost, PfmResult } from "../_shared/pfm.ts";
-import { background, serviceClient, timingSafeEqual } from "../_shared/util.ts";
+import { background, serviceClient, teamOf, timingSafeEqual } from "../_shared/util.ts";
 
 type Db = ReturnType<typeof serviceClient>;
 
@@ -102,8 +102,16 @@ async function onPost(db: Db, p: PfmPost) {
 
 async function onAccount(db: Db, a: PfmAccount) {
   if (!a?.id || a.platform !== "instagram") return;
+  // O time vem do external_id gerado no "Conectar Instagram"; uma conta que já
+  // tem time continua nele (quem conectou primeiro fica com ela).
+  const { data: existing } = await db.from("accounts").select("team_id").eq("id", a.id).maybeSingle();
+  const teamId = existing?.team_id ?? teamOf(a.external_id);
+  if (!teamId) { console.log("conta sem time reconhecido", a.id, a.external_id); return; }
+  const { data: team } = await db.from("teams").select("id").eq("id", teamId).maybeSingle();
+  if (!team) { console.log("time não existe", teamId); return; }
   await db.from("accounts").upsert({
     id: a.id,
+    team_id: teamId,
     platform: a.platform,
     username: a.username,
     user_id: a.user_id,

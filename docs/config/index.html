@@ -16,17 +16,19 @@
 <body>
 <header class="top"></header>
 <main class="shell">
-  <div class="page-head"><div><div class="eyebrow">Equipe, Post for Me e uso</div><h1 class="h1">Configurações</h1></div></div>
+  <div class="page-head"><div><div class="eyebrow">Time, Post for Me e uso</div><h1 class="h1">Configurações</h1></div></div>
   <div class="grid c2">
     <section class="card">
-      <h2>Equipe</h2>
-      <p class="help">Quem pode entrar no painel. A pessoa cria a própria senha em "Primeiro acesso" na tela de login.</p>
+      <div class="split"><h2 id="team-title">Time</h2><div class="inline"><button class="btn ghost small" id="rename" hidden>Renomear</button><button class="btn danger small" id="leave" hidden>Sair do time</button></div></div>
+      <p class="help">Todo mundo do time vê as mesmas contas e publicações. Cada pessoa nova no InstaFlow ganha o próprio time; para trabalhar junto, convide pelo e-mail. Quem já tem conta entra na hora; quem não tem entra ao criar a conta.</p>
       <div class="list" id="team"></div>
-      <form class="inline" id="add-form" novalidate>
+      <div id="invites-wrap" hidden><h3 style="margin-top:8px">Convites pendentes</h3><div class="list" id="invites"></div></div>
+      <form class="inline" id="add-form" novalidate hidden>
         <input id="add-email" type="email" class="input" placeholder="email@exemplo.com" style="flex:1;min-width:180px" required>
         <select id="add-role" class="input" style="width:auto"><option value="editor">Editor</option><option value="admin">Admin</option></select>
-        <button class="btn">Adicionar</button>
+        <button class="btn">Convidar</button>
       </form>
+      <p class="help" id="limits"></p>
     </section>
     <section class="card">
       <h2>Post for Me</h2>
@@ -36,38 +38,83 @@
     <section class="card">
       <h2>Uso do mês</h2>
       <div id="usage" class="stack"></div>
-      <p class="help">O plano do Post for Me conta 1 por conta publicada. O Instagram limita cada conta a 100 posts via API por 24 h.</p>
+      <p class="help">Cada conta que recebe uma publicação conta 1. O Instagram limita cada conta a 100 posts via API por 24 h.</p>
     </section>
     <section class="card">
       <h2>Como funciona</h2>
       <ul class="small muted" style="margin:0;padding-left:18px;display:grid;gap:4px">
         <li>Horários sempre em <b>America/Bahia</b> (UTC−3).</li>
         <li>O Post for Me publica em até 2 minutos após o horário e avisa aqui conta por conta.</li>
-        <li>Fotos são convertidas para JPEG e cortadas para 4:5–1.91:1 automaticamente.</li>
+        <li>Fotos fora de 4:5–1.91:1 passam pelo <b>✂ Ajustar</b> (cortar ou caber inteira) antes de agendar; a foto sai já no tamanho certo e o Instagram não corta nada.</li>
         <li>Chaves das contas renovam sozinhas; se uma conta pedir "Reconectar", basta autorizar de novo.</li>
       </ul>
     </section>
   </div>
 </main>
 <script type="module">
-  import { supa, requireAuth, api, renderNav, fmt, esc, toast, cfg } from "../assets/app.js";
+  import { supa, requireAuth, api, renderNav, fmt, esc, toast, cfg, team, teams } from "../assets/app.js";
   const session = await requireAuth("../");
   renderNav("config", "../", session.user.email);
   const $ = (s) => document.querySelector(s);
+  const isAdmin = ["owner", "admin"].includes(team.role);
+  const ROLE = { owner: ["Dono", "acc"], admin: ["Admin", "acc"], editor: ["Editor", "neutral"] };
+
+  $("#team-title").textContent = team.name;
+  $("#rename").hidden = !isAdmin;
+  $("#add-form").hidden = !isAdmin;
+  $("#leave").hidden = team.role === "owner";
 
   async function loadTeam() {
-    const { data, error } = await supa.from("allowed_users").select("*").order("added_at");
+    const [{ data: members, error }, { data: invites }] = await Promise.all([
+      supa.from("team_members").select("*").eq("team_id", team.id).order("joined_at"),
+      isAdmin ? supa.from("team_invites").select("*").eq("team_id", team.id).is("accepted_at", null).order("created_at") : Promise.resolve({ data: [] }),
+    ]);
     if (error) { $("#team").innerHTML = `<div class="error-box">${esc(error.message)}</div>`; return; }
-    $("#team").innerHTML = (data || []).map((u) => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto auto"><span class="title">${esc(u.email)}</span><span class="pill ${u.role === "admin" ? "acc" : "neutral"}">${u.role}</span>${u.email.toLowerCase() === session.user.email.toLowerCase() ? `<span class="muted small">você</span>` : `<button class="btn danger small" data-rm="${esc(u.email)}">Remover</button>`}</div>`).join("");
+    $("#team").innerHTML = (members || []).map((m) => {
+      const [label, kind] = ROLE[m.role] || [m.role, "neutral"];
+      const me = m.user_id === session.user.id;
+      return `<div class="row" style="grid-template-columns:minmax(0,1fr) auto auto"><span><div class="title">${esc(m.email)}${me ? ' <span class="muted small">· você</span>' : ""}</div><div class="sub">desde ${fmt.date(m.joined_at)}</div></span><span class="pill ${kind}">${label}</span>${isAdmin && !me && m.role !== "owner" ? `<button class="btn danger small" data-rm="${m.user_id}" data-email="${esc(m.email)}">Remover</button>` : "<span></span>"}</div>`;
+    }).join("");
+    $("#invites-wrap").hidden = !(invites || []).length;
+    $("#invites").innerHTML = (invites || []).map((i) => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto auto"><span><div class="title">${esc(i.email)}</div><div class="sub">convidado em ${fmt.date(i.created_at)} · entra ao criar a conta</div></span><span class="pill neutral">${(ROLE[i.role] || [i.role])[0]}</span><button class="btn ghost small" data-cancel="${i.id}">Cancelar</button></div>`).join("");
   }
-  $("#team").addEventListener("click", async (e) => { const b = e.target.closest("[data-rm]"); if (!b || !confirm(`Remover ${b.dataset.rm} da equipe?`)) return; const { error } = await supa.from("allowed_users").delete().eq("email", b.dataset.rm); if (error) toast(error.message, "error"); else { toast("Removido.", "ok"); loadTeam(); } });
-  $("#add-form").addEventListener("submit", async (e) => { e.preventDefault(); const email = $("#add-email").value.trim().toLowerCase(); if (!email) return; const { error } = await supa.from("allowed_users").insert({ email, role: $("#add-role").value }); if (error) toast(/policy|permission/i.test(error.message) ? "Só administradores adicionam pessoas." : error.message, "error"); else { toast("Adicionado.", "ok"); $("#add-email").value = ""; loadTeam(); } });
+  $("#team").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-rm]"); if (!b || !confirm(`Remover ${b.dataset.email} do time?`)) return;
+    const { error } = await supa.rpc("team_remove_member", { p_team: team.id, p_user: b.dataset.rm });
+    if (error) toast(error.message, "error"); else { toast("Removido do time.", "ok"); loadTeam(); }
+  });
+  $("#invites").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-cancel]"); if (!b) return;
+    const { error } = await supa.rpc("team_cancel_invite", { p_id: b.dataset.cancel });
+    if (error) toast(error.message, "error"); else { toast("Convite cancelado.", "ok"); loadTeam(); }
+  });
+  $("#add-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("#add-email").value.trim().toLowerCase(); if (!email) return;
+    const { data, error } = await supa.rpc("team_invite", { p_team: team.id, p_email: email, p_role: $("#add-role").value });
+    if (error) { toast(error.message, "error"); return; }
+    toast(data?.status === "member" ? `${email} já tinha conta e entrou no time.` : `Convite registrado. ${email} entra no time ao criar a conta.`, "ok");
+    $("#add-email").value = ""; loadTeam();
+  });
+  $("#rename").addEventListener("click", async () => {
+    const name = prompt("Nome do time:", team.name); if (name === null) return;
+    const { error } = await supa.rpc("team_rename", { p_team: team.id, p_name: name.trim() });
+    if (error) toast(error.message, "error"); else location.reload();
+  });
+  $("#leave").addEventListener("click", async () => {
+    if (!confirm(`Sair do time "${team.name}"? Você deixa de ver as contas e publicações dele.`)) return;
+    const { error } = await supa.rpc("team_remove_member", { p_team: team.id, p_user: session.user.id });
+    if (error) { toast(error.message, "error"); return; }
+    try { localStorage.removeItem("if.team"); } catch {}
+    location.href = teams.length > 1 ? "../" : "../entrar/";
+  });
 
   async function loadUsage() {
     try {
       const u = await api("/usage");
-      const pct = Math.min(100, Math.round((u.month_published / u.month_limit) * 100));
-      $("#usage").innerHTML = `<div class="split"><b class="num" style="font-size:1.4rem">${u.month_published} <span class="muted" style="font-size:.9rem">de ${u.month_limit} posts</span></b><span class="muted small">${pct}%</span></div><div class="bar ${pct >= 90 ? "bad" : pct >= 70 ? "warn" : ""}"><i style="width:${pct}%"></i></div>`;
+      const pct = Math.min(100, Math.round((u.month_reserved / u.month_limit) * 100));
+      $("#usage").innerHTML = `<div class="split"><b class="num" style="font-size:1.4rem">${u.month_published} <span class="muted" style="font-size:.9rem">publicadas · ${u.month_reserved} usadas ou agendadas de ${u.month_limit}</span></b><span class="muted small">${pct}%</span></div><div class="bar ${pct >= 90 ? "bad" : pct >= 70 ? "warn" : ""}"><i style="width:${pct}%"></i></div>`;
+      $("#limits").textContent = `Limites deste time: ${u.team.max_accounts} contas de Instagram · ${u.month_limit} publicações por mês (conta a conta).`;
       $("#pfm").innerHTML = `
         <div class="split"><span>Chave da API</span><span class="pill ok">configurada no Supabase</span></div>
         <div class="split"><span>Avisos (webhook)</span>${u.webhook ? `<span class="pill ok">ativo</span>` : `<span class="pill warn">não registrado</span>`}</div>
@@ -76,7 +123,7 @@
         <div class="split"><span>Projeto Supabase</span><span class="muted small mono">${esc(cfg.SUPABASE_URL.replace("https://", ""))}</span></div>`;
     } catch (e) { $("#pfm").innerHTML = `<div class="error-box">${esc(e.message)}</div>`; }
   }
-  $("#test").addEventListener("click", async () => { try { const r = await api("/health"); toast(`Conexão OK · ${r.accounts_total} conta(s) no Post for Me.`, "ok"); } catch (e) { toast(e.message, "error"); } });
+  $("#test").addEventListener("click", async () => { try { const r = await api("/health"); toast(`Conexão OK · ${r.accounts_total} conta(s) neste time.`, "ok"); } catch (e) { toast(e.message, "error"); } });
   $("#hook").addEventListener("click", async () => { try { const r = await api("/webhooks/setup", { method: "POST", body: {} }); toast(r.created ? "Webhook registrado." : "Webhook já estava ativo.", "ok"); loadUsage(); } catch (e) { toast(e.message, "error"); } });
   $("#syncall").addEventListener("click", async () => { try { const r = await api("/sync", { method: "POST", body: {} }); toast(`${r.checked} publicação(ões) conferida(s).`, "ok"); } catch (e) { toast(e.message, "error"); } });
   await Promise.all([loadTeam(), loadUsage()]);

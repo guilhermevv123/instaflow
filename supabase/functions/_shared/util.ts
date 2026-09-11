@@ -16,7 +16,7 @@ export function corsHeaders(req: Request): Record<string, string> {
     origin.startsWith("file://") || extraOrigins.includes("*");
   return {
     "Access-Control-Allow-Origin": ok ? origin : (extraOrigins[0] ?? "null"),
-    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-team",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -45,11 +45,15 @@ export function serviceClient(): SupabaseClient {
 export interface Caller {
   id: string;
   email: string;
-  role: "admin" | "editor";
+  teamId: string;
+  teamName: string;
+  role: "owner" | "admin" | "editor";
+  maxAccounts: number;
+  maxPostsMonth: number;
 }
 
-// Confere o JWT do usuário chamando o Auth (funciona com qualquer tipo de
-// chave) e depois confere se o e-mail está na lista de permitidos.
+// Confere o JWT do usuário chamando o Auth e resolve o time em que ele está
+// trabalhando (cabeçalho X-Team; sem ele, o primeiro time da pessoa).
 export async function requireMember(req: Request): Promise<Caller> {
   const auth = req.headers.get("authorization") ?? "";
   if (!auth.toLowerCase().startsWith("bearer ")) throw new HttpError(401, "Faça login para continuar.");
@@ -60,10 +64,39 @@ export async function requireMember(req: Request): Promise<Caller> {
   const { data, error } = await userClient.auth.getUser();
   if (error || !data.user?.email) throw new HttpError(401, "Sessão inválida ou expirada. Entre de novo.");
   const email = data.user.email.toLowerCase();
-  const { data: allowed } = await serviceClient()
-    .from("allowed_users").select("role").ilike("email", email).maybeSingle();
-  if (!allowed) throw new HttpError(403, `O e-mail ${email} não tem acesso a este painel.`);
-  return { id: data.user.id, email, role: allowed.role as Caller["role"] };
+
+  const { data: memberships, error: mErr } = await serviceClient()
+    .from("team_members")
+    .select("team_id, role, joined_at, teams(name, max_accounts, max_posts_month)")
+    .eq("user_id", data.user.id)
+    .order("joined_at");
+  if (mErr) throw new HttpError(500, mErr.message);
+  if (!memberships?.length) throw new HttpError(403, "Sua conta ainda não está em nenhum time. Saia e entre de novo.");
+
+  const wanted = req.headers.get("x-team")?.trim();
+  const m = wanted ? memberships.find((x) => x.team_id === wanted) : memberships[0];
+  if (!m) throw new HttpError(403, "Você não faz parte deste time.");
+  const team = (Array.isArray(m.teams) ? m.teams[0] : m.teams) as { name: string; max_accounts: number; max_posts_month: number } | null;
+  return {
+    id: data.user.id,
+    email,
+    teamId: m.team_id,
+    teamName: team?.name ?? "Time",
+    role: m.role as Caller["role"],
+    maxAccounts: team?.max_accounts ?? 20,
+    maxPostsMonth: team?.max_posts_month ?? 300,
+  };
+}
+
+// As contas conectadas pelo painel levam este prefixo no external_id do
+// Post for Me, e é por ele que o webhook sabe de que time a conta é.
+const TEAM_TAG = /^ifteam_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+export function teamTag(teamId: string): string {
+  return `ifteam_${teamId}_${crypto.randomUUID().slice(0, 8)}`;
+}
+export function teamOf(externalId: string | null | undefined): string | null {
+  const m = TEAM_TAG.exec(externalId ?? "");
+  return m ? m[1].toLowerCase() : null;
 }
 
 export async function readJson<T = Record<string, unknown>>(req: Request): Promise<T> {

@@ -97,7 +97,7 @@
 
       <div class="anim" style="--d: 600ms">
         <div class="login-links" id="links">
-          <a href="#" data-mode="signup">Primeiro acesso (criar senha)</a>
+          <a href="#" data-mode="signup">Criar conta</a>
           <a href="#" data-mode="forgot">Esqueci a senha</a>
         </div>
         <div class="login-links" id="back" hidden><a href="#" data-mode="signin">← Voltar para entrar</a></div>
@@ -105,7 +105,7 @@
 
       <p class="login-foot anim" style="--d: 700ms">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        Só e-mails autorizados pelo administrador
+        Cada conta tem o seu próprio time
       </p>
     </div>
   </section>
@@ -194,7 +194,7 @@
   const next = qs("next") || "../";
   const titles = {
     signin: ["Bem-vindo <em>de volta</em>", "Entre para agendar e acompanhar as suas publicações.", "Entrar no InstaFlow", "Entrando…"],
-    signup: ["Primeiro <em>acesso</em>", "Crie sua senha e entre. Só e-mails autorizados pelo administrador conseguem usar o painel.", "Criar senha e entrar", "Criando…"],
+    signup: ["Crie sua <em>conta</em>", "Você ganha o seu próprio time na hora. Se alguém te convidou, você entra no time dessa pessoa.", "Criar conta e entrar", "Criando…"],
     forgot: ["Redefinir <em>senha</em>", "Enviamos um link para o seu e-mail.", "Enviar link", "Enviando…"],
     recovery: ["Nova <em>senha</em>", "Escolha a nova senha para a sua conta.", "Salvar nova senha", "Salvando…"],
   };
@@ -229,7 +229,9 @@
     w.style.setProperty("--wx", `${r.left + r.width / 2}px`);
     w.style.setProperty("--wy", `${r.top + r.height / 2}px`);
     document.body.appendChild(w);
-    await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+    // setTimeout (não requestAnimationFrame): em aba oculta o rAF congela e a
+    // pessoa ficaria presa nesta tela.
+    await new Promise((ok) => setTimeout(ok, 30));
     w.classList.add("go");
     await new Promise((ok) => setTimeout(ok, 720));
   }
@@ -237,6 +239,7 @@
   // Voltou da autorização do Instagram sem sessão neste endereço? Avisa que deu certo.
   if (/isSuccess=true/.test(decodeURIComponent(next))) say("Instagram conectado com sucesso. Entre para ver a conta em Contas.", "ok");
   else if (/isSuccess=false/.test(decodeURIComponent(next))) say("O Instagram não autorizou a conexão. Entre e tente de novo em Contas.");
+  else if (qs("semtime")) say("Sua conta não está em nenhum time. Entre de novo; se continuar, fale com quem te convidou.");
   // Sessão já ativa → segue. Link de recuperação → modo nova senha.
   if (location.hash.includes("type=recovery")) setMode("recovery");
   supa.auth.onAuthStateChange((event) => { if (event === "PASSWORD_RECOVERY") setMode("recovery"); });
@@ -244,11 +247,17 @@
   if (s.session && mode !== "recovery") { await afterLogin(); }
 
   async function afterLogin({ animate = false } = {}) {
-    // Só membros conseguem ler allowed_users (RLS). Se vier vazio, avisa.
-    const { data, error } = await supa.from("allowed_users").select("email").limit(1);
-    if (error || !data?.length) {
+    // Toda conta nasce no próprio time (ou entra no time que a convidou).
+    // Se não achar nenhum, algo falhou no cadastro: avisa em vez de travar.
+    let found = false;
+    for (let i = 0; i < 3 && !found; i++) {
+      const { data } = await supa.from("team_members").select("team_id").limit(1);
+      found = Boolean(data?.length);
+      if (!found) await new Promise((ok) => setTimeout(ok, 400));
+    }
+    if (!found) {
       await supa.auth.signOut();
-      say("Este e-mail ainda não tem acesso ao painel. Peça ao administrador para adicioná-lo em Config → Equipe.");
+      say("Sua conta foi criada, mas o time ainda não apareceu. Tente entrar de novo em alguns segundos.");
       shake();
       return;
     }

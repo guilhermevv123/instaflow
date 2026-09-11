@@ -40,7 +40,7 @@
   const next = qs("next") || "../";
   const titles = {
     signin: ["Entrar", "Use o e-mail cadastrado na equipe.", "Entrar"],
-    signup: ["Primeiro acesso", "Crie sua senha. Você recebe um e-mail para confirmar.", "Criar senha"],
+    signup: ["Primeiro acesso", "Crie sua senha e entre. Só e-mails autorizados pelo administrador conseguem usar o painel.", "Criar senha e entrar"],
     forgot: ["Redefinir senha", "Enviamos um link para o seu e-mail.", "Enviar link"],
     recovery: ["Nova senha", "Escolha a nova senha para a sua conta.", "Salvar nova senha"],
   };
@@ -92,7 +92,7 @@
         const { data, error } = await supa.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
         if (error) throw new Error(traduz(error.message));
         if (data.session) await afterLogin();
-        else say("Conta criada. Abra o e-mail de confirmação e depois entre com a sua senha.", "ok");
+        else say("Conta criada. Agora clique em Entrar com o seu e-mail e a senha que você acabou de criar.", "ok");
       } else if (mode === "forgot") {
         const { error } = await supa.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
         if (error) throw new Error(traduz(error.message));

@@ -3,7 +3,7 @@
 // que a página gera para importar no Postman, Insomnia, n8n etc.
 // Textos em HTML simples; {BASE} vira o endereço da API na hora de mostrar.
 
-export const VERSION = "1.0.0";
+export const VERSION = "1.1.0";
 export const UPDATED = "14/09/2026";
 
 // ------------------------------------------------------------------ exemplos reutilizados
@@ -189,7 +189,7 @@ export const GROUPS = [
           { name: "archived", type: "boolean", desc: "<code>true</code> inclui contas removidas que ficaram arquivadas por terem histórico.", default: false },
         ],
         example: { query: "platform=instagram&status=connected" },
-        desc: "<p><code>published_24h</code> é importante no Instagram: cada conta aceita no máximo <b>100 publicações pela API a cada 24 horas</b>. <code>access_token_expires_at</code> é renovado sozinho; se uma conta ficar <code>disconnected</code>, ela precisa ser reconectada (POST /accounts/connect com <code>reconnect: true</code>).</p>",
+        desc: "<p><code>published_24h</code> é importante no Instagram: cada conta aceita no máximo <b>100 publicações pela API a cada 24 horas</b>. <code>access_token_expires_at</code> é renovado sozinho; se uma conta ficar <code>disconnected</code>, ela precisa ser reconectada (POST /accounts/connect com o <code>account_id</code> dela).</p>",
         response: { status: 200, body: { data: [conta(CONTA_IG, "instagram", "lojacentro", { label: "Loja Centro" }), conta(CONTA_TT, "tiktok", "lojacentro.tt", { followers: 5310, published_24h: 1 })], meta: { limit: 2, offset: 0, total: 2, has_more: false } } },
       },
       {
@@ -213,8 +213,9 @@ export const GROUPS = [
         title: "Conectar conta (link de autorização)",
         summary: "Gera o link que a pessoa abre no navegador para autorizar a conta dela.",
         body: [
-          { name: "platform", type: "string", enum: ["instagram", "facebook", "tiktok"], default: "instagram", desc: "Rede a conectar." },
-          { name: "reconnect", type: "boolean", default: false, desc: "<code>true</code> para reconectar uma conta que já existe (não conta no limite de contas)." },
+          { name: "platform", type: "string", enum: ["instagram", "facebook", "tiktok"], default: "instagram", desc: "Rede a conectar. Com <code>account_id</code>, vale a rede da conta." },
+          { name: "account_id", type: "string", desc: "Id (spc_…) de uma conta que <b>já está no time</b>, para reconectar ou pedir de novo as permissões dela (por exemplo, as de métricas). A autorização leva a identificação dessa conta: sem ela, o serviço de publicação recusa a conta que já existe. Não conta no limite de contas, e a resposta repete o <code>account_id</code>." },
+          { name: "reconnect", type: "boolean", default: false, desc: "<code>true</code> não conta no limite de contas. Para uma conta que já está no time, mande <code>account_id</code>." },
         ],
         example: { body: { platform: "instagram" } },
         desc: `<ol class="passos">
@@ -222,9 +223,10 @@ export const GROUPS = [
           <li>Abra o <code>url</code> no navegador da pessoa (o login usa a conta que estiver aberta no navegador: no Instagram, troque de conta antes, se preciso).</li>
           <li>A pessoa autoriza. <b>Instagram</b>: precisa ser conta Profissional (Empresa ou Criador). <b>Facebook</b>: marque as Páginas; cada Página vira uma conta. <b>TikTok</b>: perfil pessoal ou de criador.</li>
           <li>A conta aparece no time em poucos segundos. Receba o webhook <code>account.updated</code> ou chame POST /accounts/sync.</li>
-        </ol><p>O link vale por pouco tempo: gere na hora de usar. Chaves presas a algumas contas não podem conectar contas novas.</p>`,
+        </ol><p>O link vale por pouco tempo: gere na hora de usar. Chaves presas a algumas contas não conectam contas novas, só reconectam as delas (com <code>account_id</code>).</p>
+        <p><b>Conta que já existe.</b> Se a pessoa autorizar uma conta que já está conectada sem o <code>account_id</code> dela (por exemplo, esqueceu de trocar de conta no navegador), a volta chega com <code>isSuccess=false</code> e <code>error=External Id already exists for account spc_…|No valid accounts found</code>. Nada muda na conta: se ela for do seu time, gere o link de novo com o <code>account_id</code> que veio no erro; se a ideia era conectar outra, troque para a conta certa no navegador.</p>`,
         response: { status: 200, body: { url: "https://www.instagram.com/oauth/authorize?client_id=…&state=…", platform: "instagram" } },
-        errors: [[400, "(sem code)", "O time já está no limite de contas."], [403, "conta_bloqueada"]],
+        errors: [[400, "(sem code)", "O time já está no limite de contas, ou a rede não é suportada."], [403, "conta_bloqueada"], [404, "(sem code)", "O account_id não é de uma conta do time (ou a chave não pode usar essa conta)."]],
       },
       {
         id: "disconnect-account", method: "POST", path: "/accounts/{account_id}/disconnect", auth: "write",

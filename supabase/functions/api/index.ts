@@ -411,11 +411,23 @@ async function syncAccounts(db: Db, caller: Caller) {
   return { accounts: (data ?? []).filter((a) => accountAllowed(caller, a.id as string)), synced: rows.length };
 }
 
-async function connectUrl(db: Db, caller: Caller, body: { platform?: string; reconnect?: boolean }) {
-  if (caller.apiKey?.accountIds) throw new HttpError(403, "Esta chave está presa a algumas contas e não pode conectar contas novas.", "conta_bloqueada");
-  const platform = (body.platform ?? "instagram") as Platform;
+async function connectUrl(db: Db, caller: Caller, body: { platform?: string; reconnect?: boolean; account_id?: string }) {
+  let platform = (body.platform ?? "instagram") as Platform;
+  let externalId: string | null = null;
+  const accountId = typeof body.account_id === "string" && body.account_id.trim() ? body.account_id.trim() : null;
+  if (accountId) {
+    // Reconectar (ou pedir permissões de novo para) uma conta que já existe: o Post for Me
+    // só aceita se a autorização levar o MESMO external_id que ela já tem; com outro,
+    // recusa com "External Id already exists for account …". Sem external_id, ganha a marca do time.
+    const acc = await accountOf(db, caller, accountId);
+    platform = acc.platform as Platform;
+    const atual = await pfm<PfmAccount>(`/social-accounts/${encodeURIComponent(accountId)}`).catch(() => null);
+    externalId = atual?.external_id || acc.external_id || null;
+  } else if (caller.apiKey?.accountIds) {
+    throw new HttpError(403, "Esta chave está presa a algumas contas e não pode conectar contas novas.", "conta_bloqueada");
+  }
   if (!(SUPPORTED as readonly string[]).includes(platform)) throw new HttpError(400, "Rede não suportada. Use instagram, facebook ou tiktok.");
-  if (!body.reconnect) {
+  if (!accountId && !body.reconnect) {
     const { count } = await db.from("accounts").select("id", { count: "exact", head: true }).eq("team_id", caller.teamId).eq("archived", false);
     if ((count ?? 0) >= caller.maxAccounts) {
       throw new HttpError(400, `Este time chegou ao limite de ${caller.maxAccounts} contas. Remova uma conta ou peça para aumentar o limite.`);
@@ -434,16 +446,16 @@ async function connectUrl(db: Db, caller: Caller, body: { platform?: string; rec
     body: {
       platform,
       platform_data: platformData,
-      external_id: teamTag(caller.teamId),
+      external_id: externalId || teamTag(caller.teamId),
       // "feeds" libera visualizações, alcance, compartilhamentos e salvos de cada post (Desempenho)
       permissions: ["posts", "feeds"],
     },
   });
-  return { url: res.url, platform };
+  return accountId ? { url: res.url, platform, account_id: accountId } : { url: res.url, platform };
 }
 
 async function accountOf(db: Db, caller: Caller, id: string) {
-  const { data, error } = await db.from("accounts").select("id, team_id, platform, username").eq("id", id).eq("team_id", caller.teamId).maybeSingle();
+  const { data, error } = await db.from("accounts").select("id, team_id, platform, username, external_id").eq("id", id).eq("team_id", caller.teamId).maybeSingle();
   if (error) throw new HttpError(500, error.message);
   if (!data || !accountAllowed(caller, id)) throw new HttpError(404, "Esta conta não está no seu time.");
   return data;

@@ -78,16 +78,33 @@
   const $ = (s) => document.querySelector(s);
   let accounts = [], groups = [], usage = new Map();
 
-  // Volta da autorização do Instagram (Post for Me manda estes parâmetros)
+  // Volta da autorização (o Post for Me manda estes parâmetros). O erro mais comum
+  // é a conta aberta no navegador já estar conectada: o serviço devolve
+  // "External Id already exists for account spc_…", que aqui vira uma explicação.
+  function explicarErro(err) {
+    const partes = String(err || "").split("|").map((s) => s.trim()).filter(Boolean);
+    const ids = partes.map((p) => /External Id already exists for account (\S+)/i.exec(p)?.[1]).filter(Boolean);
+    if (ids.length) {
+      const doTime = ids.map((id) => accounts.find((x) => x.id === id)).filter(Boolean);
+      if (!doTime.length) return "Essa conta já está conectada no InstaFlow, mas não aparece neste time. A autorização usa a conta que está aberta no navegador: entre com a conta certa e tente de novo.";
+      const uma = doTime.length === 1;
+      return `${doTime.map((a) => `<b>${esc(handle(a))}</b>`).join(", ")} já ${uma ? "está conectada" : "estão conectadas"} aqui. A autorização usa a conta que está aberta no navegador: para conectar <b>outra</b> conta, entre com ela no ${esc(platformName(doTime[0].platform))} neste navegador (ou saia desta) e clique em + Conectar de novo. Para atualizar ${uma ? "essa conta" : "essas contas"}, use <b>Liberar métricas</b> ou <b>Reconectar</b> na linha ${uma ? "dela" : "de cada uma"}.`;
+    }
+    return esc(partes.filter((p) => !/^No valid accounts found$/i.test(p)).join(" · ")) || "Confira se a conta é Profissional e tente de novo.";
+  }
+  function mostrarRetorno(ok, n, err) {
+    $("#notice").innerHTML = ok
+      ? `<div class="ok-box">${n > 1 ? "Contas conectadas" : "Conta conectada"} com sucesso${n ? ` (${n})` : ""}. Já dá para agendar.</div>`
+      : `<div class="error-box">Não foi possível conectar. ${explicarErro(err)}</div>`;
+  }
   const params = new URLSearchParams(location.search);
   if (params.has("isSuccess")) {
     const ok = params.get("isSuccess") === "true";
     const n = (params.get("accountIds") || "").split(",").filter(Boolean).length;
     const err = params.get("error");
-    $("#notice").innerHTML = ok
-      ? `<div class="ok-box">Conta conectada${n > 1 ? "s" : ""} com sucesso${n ? ` (${n})` : ""}. Já dá para agendar.</div>`
-      : `<div class="error-box">Não foi possível conectar. ${esc((err || "").split("|").join(" · ")) || "Confira se a conta é Profissional e tente de novo."}</div>`;
     history.replaceState({}, "", location.pathname);
+    if (!ok) accounts = await loadAccounts({ includeArchived: false }).catch(() => []);
+    mostrarRetorno(ok, n, err);
     if (ok) await syncNow(false);
   }
 
@@ -105,10 +122,12 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") openMenu(false); });
   menu.addEventListener("click", (e) => { const b = e.target.closest("[data-p]"); if (!b) return; openMenu(false); startConnect(b.dataset.p, false); });
 
-  async function startConnect(platform = "instagram", reconnect = false) {
+  // accountId: reconectar ou liberar métricas de uma conta que já está aqui. A
+  // autorização precisa levar a identificação dela, senão o serviço recusa.
+  async function startConnect(platform = "instagram", reconnect = false, accountId = null) {
     const b = $("#connect"); b.disabled = true;
     try {
-      const { url } = await api("/accounts/connect", { method: "POST", body: { platform, reconnect } });
+      const { url } = await api("/accounts/connect", { method: "POST", body: { platform, reconnect, ...(accountId ? { account_id: accountId } : {}) } });
       const w = window.open(url, "instaflow_connect", "popup=yes,width=620,height=780");
       if (!w) { location.href = url; return; }
       popup = w;
@@ -123,9 +142,7 @@
     const d = e.data;
     if (!d || d.type !== "instaflow:connected") return;
     clearInterval(popupTimer); try { popup?.close(); } catch {} popup = null; $("#connect").disabled = false;
-    $("#notice").innerHTML = d.ok
-      ? `<div class="ok-box">Conta conectada com sucesso${d.n ? ` (${d.n})` : ""}. Já dá para agendar.</div>`
-      : `<div class="error-box">Não foi possível conectar. ${esc(String(d.error || "").split("|").join(" · ")) || "Confira se a conta é Profissional e tente de novo."}</div>`;
+    mostrarRetorno(d.ok, d.n, d.error);
     await syncNow(false);
   });
   $("#connect").addEventListener("click", (e) => { e.stopPropagation(); openMenu(menu.hidden); });
@@ -177,10 +194,10 @@
         const rede = a?.platform || "instagram";
         const passo = rede === "instagram" ? `Antes de continuar, entre no instagram.com com ${handle(a)} neste navegador (a autorização usa a conta que estiver aberta).` : "Na autorização, marque de novo esta conta.";
         if (!(await confirmDialog(`Liberar as métricas de ${handle(a)}? Vai abrir a autorização de novo, agora pedindo também visualizações, alcance, compartilhamentos e salvos. ${passo} A conta continua a mesma e nada agendado se perde.`, { okLabel: "Abrir autorização" }))) return;
-        await startConnect(rede, true); return;
+        await startConnect(rede, true, a?.id); return;
       } else if (t.dataset.reconnect) {
         const a = accounts.find((x) => x.id === t.dataset.reconnect);
-        await startConnect(a?.platform || "instagram", true); return;
+        await startConnect(a?.platform || "instagram", true, a?.id); return;
       } else if (t.dataset.disconnect) {
         if (!(await confirmDialog("Desconectar esta conta? Publicações agendadas para ela vão falhar até reconectar.", { okLabel: "Desconectar", danger: true }))) return;
         await api(`/accounts/${t.dataset.disconnect}/disconnect`, { method: "POST", body: {} }); toast("Conta desconectada.", "ok");

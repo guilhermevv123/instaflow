@@ -783,7 +783,7 @@ capa = subir("capa.jpg", "image/jpeg")  # opcional</code></pre>
         <p>Limites: até 49 versões por chamada e 150 gerações com IA por time a cada 24 horas.</p>
       </section>
 
-      <section class="guia" id="contas-grupos" data-guia="Contas e grupos" data-grupo-nav="Publicar" data-busca="conectar conta instagram facebook tiktok reconectar desconectada grupo">
+      <section class="guia" id="contas-grupos" data-guia="Contas e grupos" data-grupo-nav="Publicar" data-busca="conectar conta instagram facebook tiktok reconectar desconectada grupo account_id liberar métricas external id already exists">
         <span class="eyebrow-api">Guia prático</span>
         <h2>Contas e grupos</h2>
         <h3>Conectar uma conta pelo seu sistema</h3>
@@ -794,7 +794,8 @@ capa = subir("capa.jpg", "image/jpeg")  # opcional</code></pre>
           <li>Em poucos segundos a conta aparece em <a href="#list-accounts"><code>GET /accounts</code></a> e chega o webhook <code>account.updated</code>.</li>
         </ol>
         <ul>
-          <li>Conta com <code>status: "disconnected"</code> precisa ser <b>reconectada</b>: mesmo caminho, com <code>"reconnect": true</code>. Publicações agendadas para ela falham até lá.</li>
+          <li>Conta com <code>status: "disconnected"</code> precisa ser <b>reconectada</b>: mesmo caminho, mandando o <code>"account_id"</code> dela. Publicações agendadas para ela falham até lá.</li>
+          <li>Para <b>atualizar</b> uma conta que já está conectada (por exemplo, pedir de novo as permissões de métricas), mande também o <code>"account_id"</code>. Sem ele, o serviço de publicação recusa a conta que já existe e a volta chega com <code>isSuccess=false</code> e <code>External Id already exists for account spc_…</code>.</li>
           <li>As chaves de acesso de cada conta são renovadas sozinhas (<code>access_token_expires_at</code>).</li>
           <li>Apelidos das contas são definidos no painel e aparecem em <code>label</code>.</li>
           <li>Remover uma conta com histórico a deixa <b>arquivada</b> (<code>archived: true</code>): o histórico continua.</li>
@@ -977,6 +978,11 @@ http_response_code(200);
       <section class="guia" id="mudancas" data-guia="Histórico de versões" data-grupo-nav="Avisos e integrações" data-busca="changelog versão mudanças novidades">
         <span class="eyebrow-api">Versões</span>
         <h2>Histórico de versões</h2>
+        <h3>1.1.0 · 14/09/2026</h3>
+        <ul>
+          <li><a href="#connect-account"><code>POST /accounts/connect</code></a> aceita <code>account_id</code> para reconectar ou pedir de novo as permissões de uma conta que já está no time. Antes, a autorização de uma conta que já existia voltava recusada com <code>External Id already exists for account …</code>.</li>
+          <li>Chaves presas a algumas contas podem reconectar as contas delas (continuam sem conectar contas novas).</li>
+        </ul>
         <h3>1.0.0 · 14/09/2026</h3>
         <ul>
           <li>Chaves de acesso por time: leitura e escrita, só leitura, presas a contas e limite por minuto.</li>

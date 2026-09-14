@@ -18,12 +18,38 @@ export function corsHeaders(req: Request): Record<string, string> {
     /^https?:\/\/5\.181\.218\.72(:\d+)?$/.test(origin) ||
     origin.startsWith("file://") || extraOrigins.includes("*");
   return {
-    "Access-Control-Allow-Origin": ok ? origin : (extraOrigins[0] ?? "null"),
-    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-team",
+    // com chave de API (ifk_…) qualquer origem pode chamar: a chave é a credencial. A consulta
+    // prévia do navegador (OPTIONS) não leva o token, então também libera; sem cookie, não há CSRF.
+    "Access-Control-Allow-Origin": ok || isApiKeyRequest(req) || req.method === "OPTIONS" ? (origin || "*") : (extraOrigins[0] ?? "null"),
+    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-team, idempotency-key",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Expose-Headers": "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, X-Request-Id, Idempotent-Replayed",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };
+}
+
+// Chaves da API pública: ifk_ + 40 letras/números. Guardamos só o SHA-256.
+export const API_KEY_RE = /^ifk_[A-Za-z0-9]{40}$/;
+export function bearerOf(req: Request): string {
+  const auth = req.headers.get("authorization") ?? "";
+  return auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+}
+export const isApiKeyRequest = (req: Request) => API_KEY_RE.test(bearerOf(req));
+
+export async function sha256Hex(s: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const B62 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+export function randomToken(prefix: string, len: number): string {
+  let out = "";
+  while (out.length < len) {
+    const bytes = crypto.getRandomValues(new Uint8Array(len * 2));
+    for (const b of bytes) { if (b < 248 && out.length < len) out += B62[b % 62]; } // 248 = 4×62: sem viés
+  }
+  return prefix + out;
 }
 
 export function json(req: Request, body: unknown, status = 200, extra: Record<string, string> = {}): Response {
@@ -36,6 +62,8 @@ export function json(req: Request, body: unknown, status = 200, extra: Record<st
 export class HttpError extends Error {
   status: number;
   code?: string; // para o painel decidir o que fazer (ex.: "sem_ia" → gerador local)
+  apiKey?: ApiKeyInfo; // preenchido quando a chave existe mas passou do limite (para registrar a chamada)
+  teamId?: string;
   constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
@@ -47,21 +75,42 @@ export function serviceClient(): SupabaseClient {
   return createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 }
 
-export interface Caller {
+export interface ApiKeyInfo {
   id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];        // vazio = tudo; "read" = só leitura
+  accountIds: string[] | null; // null = todas as contas do time
+  rateLimit: number;
+  count: number;           // chamadas neste minuto (esta inclusa)
+  reset: string;           // quando o minuto vira
+}
+
+export interface Caller {
+  id: string | null;       // null quando quem chama é uma chave de API
   email: string;
   teamId: string;
   teamName: string;
-  role: "owner" | "admin" | "editor";
+  role: "owner" | "admin" | "editor" | "api";
   maxAccounts: number;
   maxPostsMonth: number;
+  via: "jwt" | "key";
+  apiKey?: ApiKeyInfo;
 }
 
-// Confere o JWT do usuário chamando o Auth e resolve o time em que ele está
-// trabalhando (cabeçalho X-Team; sem ele, o primeiro time da pessoa).
+export const isAdmin = (c: Caller) => c.role === "owner" || c.role === "admin";
+export const canWrite = (c: Caller) => !(c.apiKey?.scopes ?? []).includes("read");
+// Conta permitida para esta chave (chave sem restrição vê todas do time).
+export const accountAllowed = (c: Caller, accountId: string) => !c.apiKey?.accountIds || c.apiKey.accountIds.includes(accountId);
+
+// Quem chama: o painel (JWT do Supabase Auth, time pelo cabeçalho X-Team) ou
+// uma chave da API pública (ifk_…, presa a um time).
 export async function requireMember(req: Request): Promise<Caller> {
   const auth = req.headers.get("authorization") ?? "";
-  if (!auth.toLowerCase().startsWith("bearer ")) throw new HttpError(401, "Faça login para continuar.");
+  if (!auth.toLowerCase().startsWith("bearer ")) throw new HttpError(401, "Faltou a autorização: envie o cabeçalho Authorization: Bearer <sua chave ifk_…> (ou entre no painel).", "sem_autorizacao");
+  const token = bearerOf(req);
+  if (API_KEY_RE.test(token)) return requireApiKey(req);
+  if (token.startsWith("ifk_")) throw new HttpError(401, "Chave de API em formato inválido: ela começa com ifk_ e tem 44 caracteres. Copie de novo, sem espaços, ou gere outra em Config → API.", "chave_invalida");
   const userClient = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: auth } },
     auth: { persistSession: false },
@@ -90,6 +139,37 @@ export async function requireMember(req: Request): Promise<Caller> {
     role: m.role as Caller["role"],
     maxAccounts: team?.max_accounts ?? 20,
     maxPostsMonth: team?.max_posts_month ?? 1000,
+    via: "jwt",
+  };
+}
+
+async function requireApiKey(req: Request): Promise<Caller> {
+  const db = serviceClient();
+  const { data, error } = await db.rpc("api_key_hit", { p_hash: await sha256Hex(bearerOf(req)) });
+  if (error) throw new HttpError(500, error.message);
+  const k = data as { id: string; team_id: string; name: string; prefix: string; scopes: string[] | null; account_ids: string[] | null; rate_limit: number; count: number; reset: string; revoked?: boolean } | null;
+  if (!k) throw new HttpError(401, "Chave de API inválida. Gere uma nova em Config → API.", "chave_invalida");
+  if (k.revoked) throw new HttpError(401, "Esta chave de API foi revogada.", "chave_revogada");
+  const apiKey: ApiKeyInfo = { id: k.id, name: k.name, prefix: k.prefix, scopes: k.scopes ?? [], accountIds: k.account_ids ?? null, rateLimit: k.rate_limit, count: k.count, reset: k.reset };
+  if (k.count > k.rate_limit) {
+    const e = new HttpError(429, `Limite de ${k.rate_limit} chamadas por minuto desta chave. Tente de novo em instantes.`, "limite_chamadas");
+    e.apiKey = apiKey;
+    e.teamId = k.team_id;
+    throw e;
+  }
+  const { data: team, error: tErr } = await db.from("teams").select("name, max_accounts, max_posts_month").eq("id", k.team_id).maybeSingle();
+  if (tErr) throw new HttpError(500, tErr.message);
+  if (!team) throw new HttpError(401, "O time desta chave não existe mais.", "chave_invalida");
+  return {
+    id: null,
+    email: `chave:${k.name}`,
+    teamId: k.team_id,
+    teamName: team.name ?? "Time",
+    role: "api",
+    maxAccounts: team.max_accounts ?? 20,
+    maxPostsMonth: team.max_posts_month ?? 1000,
+    via: "key",
+    apiKey,
   };
 }
 

@@ -1,0 +1,1010 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API do InstaFlow · Documentação</title>
+<meta name="description" content="Documentação completa da API do InstaFlow: chaves de acesso, contas, upload de vídeos e fotos, publicações em várias redes, variações de legenda, desempenho e webhooks.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/api-docs.css">
+<script src="../assets/config.js"></script>
+  <link rel="icon" type="image/svg+xml" href="../assets/brand/instaflow-icon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/brand/favicon-32.png">
+  <link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+  <meta name="theme-color" content="#FF6A00">
+</head>
+<body>
+<div class="docs">
+  <aside class="docs-nav" id="docs-nav" aria-label="Seções da documentação">
+    <a class="docs-brand" href="#topo"><img src="../assets/brand/instaflow-logo.svg" alt="InstaFlow"><b>API</b><span class="ver">v<span data-versao></span></span></a>
+    <div class="nav-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="nav-busca" type="search" class="input" placeholder="Buscar (atalho: /)" aria-label="Buscar na documentação" autocomplete="off">
+    </div>
+    <nav id="nav-links"></nav>
+    <div class="nav-sec"><h4>Painel</h4><a href="../">← Voltar ao InstaFlow</a><a href="../config/#api-card">Gerar ou revogar chaves</a></div>
+  </aside>
+  <div class="docs-scrim" id="docs-scrim"></div>
+
+  <div class="docs-main">
+    <header class="docs-top">
+      <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Abrir o menu da documentação"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <span class="crumb" id="crumb">Documentação da API</span>
+      <span class="spacer"></span>
+      <button type="button" class="btn ghost small hide-m" data-openapi>Baixar OpenAPI</button>
+      <a class="btn small" href="../config/#api-card">Gerar chave</a>
+    </header>
+
+    <main class="docs-content" id="topo">
+      <section class="hero-api">
+        <span class="eyebrow-api">InstaFlow API · v<span data-versao></span> · atualizada em <span data-atualizado></span></span>
+        <h1>Publique em todas as suas contas direto do seu sistema</h1>
+        <p class="lead">A API faz tudo o que o painel faz: conectar contas de <b>Instagram</b>, <b>Facebook</b> e <b>TikTok</b>, subir fotos e vídeos, agendar a mesma publicação em dezenas de contas com legenda própria ou <b>variações automáticas</b>, acompanhar o resultado conta a conta, ver o desempenho e receber avisos por webhook. Funciona com qualquer linguagem e com n8n, Make ou Zapier.</p>
+        <div class="base-box"><span class="label">Endereço base</span><code data-base></code><button type="button" class="btn ghost small" data-copiar-base>Copiar</button></div>
+        <div class="fluxo" aria-label="Caminho de uma publicação"><span>1. chave</span><i>→</i><span>2. contas</span><i>→</i><span>3. mídia</span><i>→</i><span>4. publicação</span><i>→</i><span>5. resultado</span></div>
+        <div class="cards-api">
+          <a href="#comece"><b>Comece em 5 minutos</b><span>Da chave à primeira publicação agendada, com script pronto.</span></a>
+          <a href="#videos"><b>Publicar vídeo</b><span>Reels no Instagram e Facebook e vídeo no TikTok, passo a passo.</span></a>
+          <a href="#variacoes"><b>Variações de legenda</b><span>Uma legenda diferente para cada conta, com ou sem IA.</span></a>
+          <a href="#webhooks"><b>Webhooks</b><span>Receba um aviso quando publicar ou falhar, com assinatura.</span></a>
+          <a href="#integracoes"><b>n8n, Make e Zapier</b><span>Como montar a automação sem programar.</span></a>
+          <a href="#ref-posts"><b>Referência completa</b><span>Cada rota, campo, exemplo e erro. Teste com a sua chave.</span></a>
+        </div>
+      </section>
+
+      <section class="guia" id="comece" data-guia="Comece em 5 minutos" data-grupo-nav="Começo" data-busca="primeiros passos quickstart tutorial exemplo script">
+        <span class="eyebrow-api">Começo</span>
+        <h2>Comece em 5 minutos</h2>
+        <p>Este é o caminho completo de uma integração: gerar a chave, conferir, pegar as contas, subir um vídeo, testar e agendar. No fim tem o script inteiro em três linguagens.</p>
+
+        <ol class="passos">
+          <li><b>Gere a chave de acesso.</b> No painel, abra <a href="../config/#api-card">Config → API e integrações</a>, dê um nome que diga onde ela vai ser usada (ex.: <code>n8n</code>, <code>site</code>) e clique em <b>Gerar chave</b>. Só o dono ou um admin do time vê esse botão.
+            <div class="callout warn"><b>A chave aparece uma vez só.</b> Copie na hora e guarde no gerenciador de senhas ou nas variáveis de ambiente do seu sistema. Se perder, revogue e gere outra.</div>
+            <p>No terminal, deixe a chave numa variável para os exemplos funcionarem do jeito que estão:</p>
+            <pre class="code" data-lang="code"><code># macOS / Linux
+export INSTAFLOW_KEY="ifk_cole_a_sua_chave_aqui"
+
+# Windows (PowerShell)
+$env:INSTAFLOW_KEY = "ifk_cole_a_sua_chave_aqui"</code></pre>
+          </li>
+          <li><b>Confira se está tudo certo</b> chamando <a href="#get-me"><code>GET /me</code></a>. Se voltar <code>200</code> com o nome do time, a chave e o endereço estão certos.
+            <pre class="code" data-lang="code"><code>curl "{BASE}/me" -H "Authorization: Bearer $INSTAFLOW_KEY"</code></pre>
+          </li>
+          <li><b>Pegue os ids das contas</b> com <a href="#list-accounts"><code>GET /accounts</code></a>. Cada conta tem um <code>id</code> que começa com <code>spc_</code>: é ele que vai na publicação. Quer mandar para um grupo inteiro? Use <a href="#list-groups"><code>GET /groups</code></a> e o campo <code>group_ids</code>.</li>
+          <li><b>Suba o vídeo</b>: <a href="#upload-url"><code>POST /media/upload-url</code></a> devolve um endereço para enviar o arquivo (<code>upload_url</code>) e o link que ele vai ter (<code>media_url</code>). Envie o arquivo com <code>PUT</code> e guarde o <code>media_url</code>. Se o arquivo já está num link público <code>https</code>, pule este passo e use o link direto.</li>
+          <li><b>Teste sem publicar</b>: mande a publicação para <a href="#create-post"><code>POST /posts</code></a> com <code>"dry_run": true</code>. A API confere as regras de cada rede, mostra o horário final e as legendas de cada conta, e <b>não publica nada</b>.</li>
+          <li><b>Agende de verdade</b>: tire o <code>dry_run</code> e mande de novo, com um cabeçalho <code>Idempotency-Key</code> (evita publicação dobrada se a sua internet cair no meio). Guarde o <code>id</code> que voltar.</li>
+          <li><b>Acompanhe</b>: cadastre um <a href="#webhooks">webhook</a> para receber <code>post.published</code> e <code>post.failed</code> de cada conta, ou consulte <a href="#get-post"><code>GET /posts/{post_id}</code></a>.</li>
+        </ol>
+
+        <h3>O script inteiro</h3>
+        <p>Sobe <code>video.mp4</code>, pega as contas conectadas de Instagram e TikTok e agenda um Reels com uma legenda diferente para cada conta. Troque a data e a legenda pelas suas.</p>
+        <div class="code-card" data-tabs>
+          <pre class="code" data-lang="code" data-tab="curl"><code>#!/usr/bin/env bash
+# bash publicar.sh   (precisa de curl e jq; a chave em INSTAFLOW_KEY)
+set -euo pipefail
+BASE="{BASE}"
+AUTH="Authorization: Bearer $INSTAFLOW_KEY"
+api() { curl -sS --fail-with-body "$@" -H "$AUTH"; }
+
+# 1) conferir a chave
+api "$BASE/me" | jq -r '"time: " + .team.name'
+
+# 2) ids das contas conectadas de Instagram e TikTok
+CONTAS=$(api "$BASE/accounts?status=connected" | jq -c '[.data[] | select(.platform == "instagram" or .platform == "tiktok") | .id]')
+
+# 3) subir o vídeo
+UP=$(api -X POST "$BASE/media/upload-url")
+curl -sS --fail-with-body -X PUT "$(jq -r .upload_url <<< "$UP")" -H "Content-Type: video/mp4" --data-binary @video.mp4
+VIDEO=$(jq -r .media_url <<< "$UP")
+
+# 4) montar a publicação (horário sem fuso = horário da Bahia)
+POST=$(jq -n --arg video "$VIDEO" --argjson contas "$CONTAS" '{
+  caption: "Promoção de sexta: tudo com 20% off! 🔥\n\n#ofertas",
+  placement: "reels",
+  media: [{url: $video, kind: "video"}],
+  account_ids: $contas,
+  scheduled_at: "2026-09-20T18:00",
+  vary_captions: true
+}')
+
+# 5) testar sem publicar e depois agendar de verdade
+api -X POST "$BASE/posts?dry_run=true" -H "Content-Type: application/json" -d "$POST" | jq '.caption_overrides'
+api -X POST "$BASE/posts" -H "Content-Type: application/json" -H "Idempotency-Key: $(uuidgen)" -d "$POST" | jq '{id, status, scheduled_at}'</code></pre>
+          <pre class="code" data-lang="code" data-tab="javascript"><code>// node publicar.mjs   (Node 18+; a chave em INSTAFLOW_KEY)
+import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+
+const BASE = "{BASE}";
+
+async function api(caminho, { method = "GET", body, headers = {} } = {}) {
+  const resposta = await fetch(BASE + caminho, {
+    method,
+    headers: {
+      Authorization: `Bearer ${process.env.INSTAFLOW_KEY}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...headers,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const dados = await resposta.json();
+  if (!resposta.ok) throw new Error(`${resposta.status} ${dados.code ?? ""} ${dados.error}`);
+  return dados;
+}
+
+// 1) conferir a chave
+const eu = await api("/me");
+console.log("time:", eu.team.name);
+
+// 2) ids das contas conectadas de Instagram e TikTok
+const { data: contas } = await api("/accounts?status=connected");
+const ids = contas.filter((c) => ["instagram", "tiktok"].includes(c.platform)).map((c) => c.id);
+
+// 3) subir o vídeo
+const { upload_url, media_url } = await api("/media/upload-url", { method: "POST" });
+const envio = await fetch(upload_url, { method: "PUT", headers: { "Content-Type": "video/mp4" }, body: await readFile("video.mp4") });
+if (!envio.ok) throw new Error(`upload falhou: ${envio.status}`);
+
+// 4) montar a publicação (horário sem fuso = horário da Bahia)
+const publicacao = {
+  caption: "Promoção de sexta: tudo com 20% off! 🔥\n\n#ofertas",
+  placement: "reels",
+  media: [{ url: media_url, kind: "video" }],
+  account_ids: ids,
+  scheduled_at: "2026-09-20T18:00",
+  vary_captions: true,
+};
+
+// 5) testar sem publicar e depois agendar de verdade
+const teste = await api("/posts", { method: "POST", body: { ...publicacao, dry_run: true } });
+console.log("vai sair assim:", teste.caption_overrides);
+const post = await api("/posts", { method: "POST", body: publicacao, headers: { "Idempotency-Key": randomUUID() } });
+console.log("agendada:", post.id, post.status, post.scheduled_at);</code></pre>
+          <pre class="code" data-lang="code" data-tab="python"><code># python publicar.py   (pip install requests; a chave em INSTAFLOW_KEY)
+import os
+import uuid
+import requests
+
+BASE = "{BASE}"
+AUTH = {"Authorization": f"Bearer {os.environ['INSTAFLOW_KEY']}"}
+
+def api(metodo, caminho, headers=None, **kw):
+    resposta = requests.request(metodo, BASE + caminho, headers={**AUTH, **(headers or {})}, timeout=60, **kw)
+    dados = resposta.json()
+    if not resposta.ok:
+        raise RuntimeError(f"{resposta.status_code} {dados.get('code')} {dados.get('error')}")
+    return dados
+
+# 1) conferir a chave
+print("time:", api("GET", "/me")["team"]["name"])
+
+# 2) ids das contas conectadas de Instagram e TikTok
+contas = api("GET", "/accounts", params={"status": "connected"})["data"]
+ids = [c["id"] for c in contas if c["platform"] in ("instagram", "tiktok")]
+
+# 3) subir o vídeo
+up = api("POST", "/media/upload-url")
+with open("video.mp4", "rb") as arquivo:
+    requests.put(up["upload_url"], data=arquivo, headers={"Content-Type": "video/mp4"}, timeout=600).raise_for_status()
+
+# 4) montar a publicação (horário sem fuso = horário da Bahia)
+publicacao = {
+    "caption": "Promoção de sexta: tudo com 20% off! 🔥\n\n#ofertas",
+    "placement": "reels",
+    "media": [{"url": up["media_url"], "kind": "video"}],
+    "account_ids": ids,
+    "scheduled_at": "2026-09-20T18:00",
+    "vary_captions": True,
+}
+
+# 5) testar sem publicar e depois agendar de verdade
+teste = api("POST", "/posts", json={**publicacao, "dry_run": True})
+print("vai sair assim:", teste["caption_overrides"])
+post = api("POST", "/posts", json=publicacao, headers={"Idempotency-Key": str(uuid.uuid4())})
+print("agendada:", post["id"], post["status"], post["scheduled_at"])</code></pre>
+        </div>
+        <div class="callout ok"><b>Pronto.</b> A publicação aparece no painel (Calendário e Fila) do mesmo jeito que as criadas lá. Tudo o que a API faz fica visível para o time.</div>
+      </section>
+
+      <section class="guia" id="autenticacao" data-guia="Autenticação e chaves" data-grupo-nav="Começo" data-busca="chave token bearer segurança revogar permissão escopo leitura">
+        <span class="eyebrow-api">Começo</span>
+        <h2>Autenticação e chaves de acesso</h2>
+        <p>Toda chamada leva a chave no cabeçalho <code>Authorization</code>, depois da palavra <code>Bearer</code>:</p>
+        <pre class="code" data-lang="code"><code>curl "{BASE}/accounts" \
+  -H "Authorization: Bearer ifk_a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0"</code></pre>
+        <p>A chave começa com <code>ifk_</code> e tem 44 caracteres. Ela pertence a <b>um time</b>: enxerga as contas, publicações, grupos e a biblioteca do time em que foi criada. Não precisa (nem dá) informar o time na chamada.</p>
+
+        <h3>Tipos de chave</h3>
+        <p>Ao gerar a chave você escolhe o que ela pode fazer. As opções se combinam.</p>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Configuração</th><th>O que a chave pode fazer</th><th>Quando usar</th></tr></thead>
+          <tbody>
+            <tr><td><b>Leitura e escrita</b> (padrão)</td><td>Tudo o que o painel faz, menos criar e revogar chaves.</td><td>Integração que publica: n8n, Make, seu sistema, seu app.</td></tr>
+            <tr><td><b>Só leitura</b></td><td>Só chamadas <code>GET</code>. Qualquer outra volta <code>403 somente_leitura</code>. Não vê o segredo dos webhooks.</td><td>Painéis de resultado, relatórios, BI, planilhas.</td></tr>
+            <tr><td><b>Presa a algumas contas</b></td><td>Só lista, publica e acompanha as contas marcadas. Não conecta contas novas. Publicação com conta de fora volta <code>403 conta_bloqueada</code>.</td><td>Um cliente, loja ou filial que só pode mexer nas contas dele.</td></tr>
+            <tr><td><b>Chamadas por minuto</b></td><td>De 10 a 600 (padrão 120). Passou, volta <code>429 limite_chamadas</code>.</td><td>Proteger a sua conta de um loop no seu código.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>Criar, trocar e revogar</h3>
+        <ul>
+          <li><b>Criar e revogar só pelo painel</b>, em <a href="../config/#api-card">Config → API e integrações</a>, e só o dono ou um admin do time. Pela API, <code>/keys</code> responde <code>403 so_painel</code>.</li>
+          <li>Até <b>20 chaves ativas</b> por time. Cada linha mostra quando a chave foi usada pela última vez e quantas chamadas fez nas últimas 24 horas.</li>
+          <li><b>Revogar vale na hora</b>: a próxima chamada com ela volta <code>401 chave_revogada</code>. Não dá para desfazer.</li>
+        </ul>
+        <h4>Trocar uma chave sem parar a integração</h4>
+        <ol class="passos">
+          <li>Gere uma chave nova com o mesmo tipo.</li>
+          <li>Coloque a nova no seu sistema (variável de ambiente, credencial do n8n etc.).</li>
+          <li>Confira com <a href="#get-me"><code>GET /me</code></a> que o sistema já está usando a nova (o campo <code>key.prefix</code> mostra o começo dela).</li>
+          <li>Revogue a antiga.</li>
+        </ol>
+
+        <h3>Cuidados de segurança</h3>
+        <ul>
+          <li><b>Nunca</b> coloque a chave em código que roda no navegador ou no celular de outras pessoas (site público, app), nem em repositório de código. Quem tem a chave publica nas suas contas.</li>
+          <li>Use <b>uma chave por integração</b>, com um nome que diga onde ela está. Se uma vazar, você revoga só ela.</li>
+          <li>Prefira <b>só leitura</b> e <b>presa a contas</b> sempre que a integração não precisar de mais.</li>
+          <li>O InstaFlow guarda só uma impressão digital (hash SHA-256) da chave. Depois de criada, <b>ninguém consegue ver a chave de novo</b>, nem o suporte.</li>
+          <li>Suspeitou de vazamento? Revogue na hora e gere outra. Os registros de uso mostram os endereços IP das chamadas.</li>
+        </ul>
+        <div class="callout"><b>Painel e API usam as mesmas rotas.</b> O painel entra com o login da pessoa; a API entra com a chave. Por isso tudo o que a API faz aparece no painel na hora, e vice-versa.</div>
+      </section>
+
+      <section class="guia" id="requisicoes" data-guia="Requisições e respostas" data-grupo-nav="Conceitos" data-busca="formato json paginação ids cabeçalhos headers versão">
+        <span class="eyebrow-api">Conceitos</span>
+        <h2>Requisições e respostas</h2>
+        <ul>
+          <li><b>Endereço base:</b> <code data-base></code>. O <code>/v1</code> é a versão da API.</li>
+          <li><b>Só HTTPS.</b> Corpo e respostas em <b>JSON UTF-8</b>. Ao mandar corpo, envie <code>Content-Type: application/json</code>.</li>
+          <li><b>Arquivos nunca vão no JSON</b>: fotos e vídeos vão por link (veja <a href="#upload-url">subir arquivo</a>).</li>
+        </ul>
+
+        <h3>Métodos</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Método</th><th>Para quê</th></tr></thead>
+          <tbody>
+            <tr><td><span class="metodo get">GET</span></td><td>Ler (listar ou ver um item). Nunca muda nada.</td></tr>
+            <tr><td><span class="metodo post">POST</span></td><td>Criar (publicação, grupo, webhook…) ou executar uma ação (sincronizar, reenviar, testar).</td></tr>
+            <tr><td><span class="metodo put">PUT</span> / <span class="metodo patch">PATCH</span></td><td>Alterar. Em publicações é substituição completa; em grupos e webhooks só muda o que você mandar.</td></tr>
+            <tr><td><span class="metodo delete">DELETE</span></td><td>Apagar, cancelar ou remover.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>Identificadores</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Item</th><th>Formato</th><th>Exemplo</th></tr></thead>
+          <tbody>
+            <tr><td>Conta</td><td>texto começando com <code>spc_</code></td><td><code>spc_Lj3Kd82hQx1mNp4</code></td></tr>
+            <tr><td>Publicação, grupo, mídia, webhook, chave</td><td>UUID</td><td><code>6f1d2c8a-3b1e-4f7a-9d2c-8e5b4a1c0f37</code></td></tr>
+            <tr><td>Post na rede (Instagram, Facebook, TikTok)</td><td>texto (números)</td><td><code>18043921876543210</code></td></tr>
+            <tr><td>Evento de webhook</td><td>texto começando com <code>evt_</code></td><td><code>evt_5c1b0a9f8e7d6c5b4a3f2e1d</code></td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>Listas e paginação</h3>
+        <p>Listas voltam dentro de <code>data</code>, com <code>meta</code> dizendo onde você está. Use <code>limit</code> (até 100) e <code>offset</code> para andar pelas páginas enquanto <code>has_more</code> for <code>true</code>.</p>
+        <pre class="code" data-lang="json"><code>{
+  "data": [ { "id": "6f1d2c8a-3b1e-4f7a-9d2c-8e5b4a1c0f37", "status": "scheduled" } ],
+  "meta": { "limit": 25, "offset": 0, "total": 61, "has_more": true }
+}</code></pre>
+        <pre class="code" data-lang="code"><code>// busca todas as páginas de uma lista
+async function todas(caminho) {
+  const itens = [];
+  for (let offset = 0; ; offset += 100) {
+    const pagina = await api(`${caminho}${caminho.includes("?") ? "&amp;" : "?"}limit=100&amp;offset=${offset}`);
+    itens.push(...pagina.data);
+    if (!pagina.meta.has_more) return itens;
+  }
+}
+const agendadas = await todas("/posts?status=scheduled");</code></pre>
+
+        <h3>Cabeçalhos das respostas</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Cabeçalho</th><th>O que diz</th></tr></thead>
+          <tbody>
+            <tr><td><code>X-Request-Id</code></td><td>Identificador desta chamada. Guarde nos seus registros e mande para o suporte quando algo der errado.</td></tr>
+            <tr><td><code>X-RateLimit-Limit</code></td><td>Quantas chamadas por minuto a chave pode fazer.</td></tr>
+            <tr><td><code>X-RateLimit-Remaining</code></td><td>Quantas ainda restam neste minuto.</td></tr>
+            <tr><td><code>X-RateLimit-Reset</code></td><td>Quando o minuto vira (segundos desde 1970, UTC).</td></tr>
+            <tr><td><code>Idempotent-Replayed</code></td><td><code>true</code> quando a resposta é a repetição de uma chamada anterior com a mesma <a href="#idempotencia">Idempotency-Key</a>.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>Datas, vazios e compatibilidade</h3>
+        <ul>
+          <li>Datas em <b>ISO 8601</b>. Nas respostas, sempre em <b>UTC</b> (terminam em <code>Z</code> ou <code>+00:00</code>). Veja <a href="#horarios">Datas e horários</a>.</li>
+          <li><code>null</code> quer dizer "sem valor" (ex.: <code>permalink</code> antes de publicar).</li>
+          <li>Na <b>v1</b> nenhum campo é removido nem muda de nome. Campos e eventos <b>novos</b> podem aparecer: o seu código deve ignorar o que não conhece.</li>
+        </ul>
+      </section>
+
+      <section class="guia" id="erros" data-guia="Erros e novas tentativas" data-grupo-nav="Conceitos" data-busca="erro code status 400 401 403 404 409 429 500 retry tentativa">
+        <span class="eyebrow-api">Conceitos</span>
+        <h2>Erros e novas tentativas</h2>
+        <p>Quando algo dá errado, a resposta tem status HTTP de erro e um JSON assim:</p>
+        <pre class="code" data-lang="json"><code>{
+  "error": "Instagram: Reels precisa de exatamente um vídeo.",
+  "code": "conta_bloqueada",
+  "details": null
+}</code></pre>
+        <ul>
+          <li><code>error</code>: o que aconteceu, em português, pronto para mostrar a quem usa o seu sistema.</li>
+          <li><code>code</code>: código estável para o seu código decidir o que fazer. Não vem em erros de validação simples (400 sem código): aí a mensagem explica o campo.</li>
+          <li><code>details</code>: só quando o erro veio do serviço que publica nas redes; traz a resposta original dele.</li>
+        </ul>
+
+        <h3>O que fazer em cada caso</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Status</th><th>Significa</th><th>O seu sistema deve</th></tr></thead>
+          <tbody>
+            <tr><td><span class="st warn">400</span></td><td>O pedido não passou nas regras.</td><td>Mostrar a mensagem e corrigir. Não repetir igual.</td></tr>
+            <tr><td><span class="st warn">401</span></td><td>Chave ausente, errada ou revogada.</td><td>Conferir a variável da chave; gerar outra se preciso.</td></tr>
+            <tr><td><span class="st warn">403</span></td><td>A chave não tem permissão para isso.</td><td>Usar uma chave de escrita ou sem restrição de contas.</td></tr>
+            <tr><td><span class="st warn">404</span></td><td>O item não existe neste time (ou nas contas da chave).</td><td>Conferir o id.</td></tr>
+            <tr><td><span class="st warn">409</span></td><td>Conflito de Idempotency-Key, ou IA desligada no modo <code>ai</code>.</td><td>Ver o <code>code</code>: esperar e repetir, ou usar chave nova.</td></tr>
+            <tr><td><span class="st warn">429</span></td><td>Limite de chamadas por minuto.</td><td>Esperar até <code>X-RateLimit-Reset</code> e diminuir o ritmo.</td></tr>
+            <tr><td><span class="st bad">5xx</span></td><td>Falha temporária nossa ou das redes.</td><td>Tentar de novo com espera crescente (1 s, 2 s, 4 s…) e a <b>mesma</b> Idempotency-Key.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>Todos os códigos</h3>
+        <div id="tabela-erros"></div>
+
+        <h3>Tentar de novo sem publicar duas vezes</h3>
+        <pre class="code" data-lang="code"><code>// repete só o que vale repetir (429 e 5xx), sempre com a MESMA Idempotency-Key
+async function comRetentativa(fazer, tentativas = 4) {
+  for (let i = 0; ; i++) {
+    const resposta = await fazer();
+    const podeRepetir = resposta.status === 429 || resposta.status >= 500;
+    if (!podeRepetir || i === tentativas - 1) return resposta;
+    const reset = Number(resposta.headers.get("X-RateLimit-Reset"));
+    const espera = resposta.status === 429 &amp;&amp; reset ? Math.max(1000, reset * 1000 - Date.now()) : 1000 * 2 ** i;
+    await new Promise((pronto) => setTimeout(pronto, espera));
+  }
+}
+
+const idem = crypto.randomUUID(); // gerada uma vez para esta publicação
+const resposta = await comRetentativa(() => fetch("{BASE}/posts", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.INSTAFLOW_KEY}`,
+    "Content-Type": "application/json",
+    "Idempotency-Key": idem,
+  },
+  body: JSON.stringify(publicacao),
+}));</code></pre>
+      </section>
+
+      <section class="guia" id="limites" data-guia="Limites" data-grupo-nav="Conceitos" data-busca="limite quota cota 100 24 horas plano mil por minuto rate limit">
+        <span class="eyebrow-api">Conceitos</span>
+        <h2>Limites</h2>
+        <p>"Conta a conta" quer dizer que cada conta que recebe uma publicação conta 1: <b>um post em 10 contas = 10</b>.</p>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Limite</th><th>Valor</th><th>Quando passa</th></tr></thead>
+          <tbody>
+            <tr><td>Chamadas por minuto (por chave)</td><td>120 (ajustável de 10 a 600 ao criar a chave)</td><td><code>429 limite_chamadas</code></td></tr>
+            <tr><td>Publicações por mês, somando todos os times (plano)</td><td>1.000, conta a conta</td><td><code>400</code> com a conta explicada</td></tr>
+            <tr><td>Publicações por mês, por time</td><td>1.000, conta a conta</td><td><code>400</code></td></tr>
+            <tr><td>Contas por time</td><td>20</td><td><code>400</code> ao conectar</td></tr>
+            <tr><td>Instagram: posts pela API, por conta</td><td>100 a cada 24 horas (carrossel conta 1)</td><td>A rede recusa: a conta aparece como falha</td></tr>
+            <tr><td>Instagram: mídias preparadas, por conta</td><td>400 a cada 24 horas</td><td>A rede recusa</td></tr>
+            <tr><td>Facebook: Reels pela API, por Página</td><td>30 a cada 24 horas</td><td>A rede recusa</td></tr>
+            <tr><td>TikTok</td><td>Limite diário do próprio TikTok por perfil</td><td>A rede recusa</td></tr>
+            <tr><td>Variações com IA</td><td>150 gerações por time a cada 24 horas; até 49 versões por chamada</td><td><code>429 limite_ia</code> no modo <code>ai</code>; no <code>auto</code>, o gerador automático completa</td></tr>
+            <tr><td>Chaves ativas / webhooks</td><td>20 chaves e 10 webhooks por time</td><td><code>400</code></td></tr>
+            <tr><td>Mídias por publicação</td><td>Instagram: 10 · TikTok: 32 fotos ou 1 vídeo · máximo geral: 32</td><td><code>400</code></td></tr>
+            <tr><td>Legenda</td><td>2.200 caracteres (Instagram: até 30 hashtags e 20 @menções)</td><td><code>400</code>, ou falha na rede</td></tr>
+            <tr><td>Registros guardados</td><td>Chamadas e entregas de webhook: 30 dias · Idempotency-Key: 24 horas</td><td>Somem sozinhos</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout"><b>Dica:</b> antes de mandar muitas publicações para uma conta de Instagram, olhe <code>published_24h</code> em <a href="#list-accounts"><code>GET /accounts</code></a>. E o uso do mês está em <a href="#get-usage"><code>GET /usage</code></a>.</div>
+      </section>
+
+      <section class="guia" id="idempotencia" data-guia="Idempotência" data-grupo-nav="Conceitos" data-busca="idempotency key duplicado repetido duas vezes timeout">
+        <span class="eyebrow-api">Conceitos</span>
+        <h2>Idempotência: nunca publicar duas vezes</h2>
+        <p>Imagine: o seu sistema manda <code>POST /posts</code>, a internet cai antes da resposta chegar e você não sabe se a publicação foi criada. Se repetir, pode publicar duas vezes, e post repetido em série pode fazer a rede restringir a conta.</p>
+        <p>A solução é mandar o cabeçalho <code>Idempotency-Key</code> com um valor único para aquela operação. Se a mesma chamada chegar de novo com o mesmo valor, a API devolve a primeira resposta e não faz nada de novo.</p>
+        <pre class="code" data-lang="code"><code>IDEM=$(uuidgen)   # gere uma vez e reutilize nas tentativas
+
+curl -X POST "{BASE}/posts" \
+  -H "Authorization: Bearer $INSTAFLOW_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $IDEM" \
+  -d @publicacao.json
+# repetir o mesmo comando devolve a MESMA resposta, com o cabeçalho Idempotent-Replayed: true</code></pre>
+        <h3>Regras</h3>
+        <ul>
+          <li>Vale para <b>qualquer POST</b>: publicar, reenviar, criar grupo, registrar mídia, cadastrar webhook.</li>
+          <li><b>Mesma chave, mesma rota e mesmo corpo</b> em até 24 horas: volta a resposta guardada (mesmo status, mesmo corpo) com <code>Idempotent-Replayed: true</code>.</li>
+          <li><b>Mesma chave com corpo ou rota diferente</b>: <code>409 idempotencia_conflito</code>. Cada operação precisa de uma chave nova.</li>
+          <li><b>A primeira ainda está rodando</b>: <code>409 idempotencia_em_andamento</code>. Espere alguns segundos e repita com a mesma chave.</li>
+          <li>Respostas <b>5xx, 409 e 429 não ficam guardadas</b>: dá para repetir com a mesma chave. Respostas <b>400</b> ficam (repetir igual daria o mesmo erro): corrija o pedido e use uma chave nova.</li>
+          <li>A chave tem até 255 caracteres visíveis, sem espaço. O ideal é um UUID novo por operação. Chaves valem por time.</li>
+        </ul>
+        <div class="callout ok"><b>Receita segura:</b> gere a Idempotency-Key no momento em que a publicação nasce no seu sistema (ex.: quando o pedido é salvo) e guarde junto com o registro. Toda tentativa de envio daquele registro usa a mesma chave.</div>
+      </section>
+
+      <section class="guia" id="horarios" data-guia="Datas e horários" data-grupo-nav="Conceitos" data-busca="fuso horário bahia utc agendar scheduled_at data hora">
+        <span class="eyebrow-api">Conceitos</span>
+        <h2>Datas e horários</h2>
+        <p>O InstaFlow trabalha no horário da <b>Bahia</b> (<code>America/Bahia</code>, UTC−3, sem horário de verão). Em <code>scheduled_at</code> você pode mandar a hora "de parede" ou uma data com fuso:</p>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Você manda</th><th>Entendido como</th><th>Guardado (UTC)</th></tr></thead>
+          <tbody>
+            <tr><td><code>2026-09-20T18:00</code></td><td>18:00 na Bahia</td><td><code>2026-09-20T21:00:00.000Z</code></td></tr>
+            <tr><td><code>2026-09-20T18:00:00</code></td><td>18:00 na Bahia</td><td><code>2026-09-20T21:00:00.000Z</code></td></tr>
+            <tr><td><code>2026-09-20T18:00:00-03:00</code></td><td>18:00 em UTC−3</td><td><code>2026-09-20T21:00:00.000Z</code></td></tr>
+            <tr><td><code>2026-09-20T21:00:00Z</code></td><td>21:00 em UTC</td><td><code>2026-09-20T21:00:00.000Z</code></td></tr>
+            <tr><td><code>null</code>, <code>"now"</code> ou sem o campo</td><td>Publicar agora</td><td><code>null</code></td></tr>
+          </tbody>
+        </table></div>
+        <ul>
+          <li>O horário precisa estar <b>no futuro</b> (aceita até 1 minuto de atraso do seu relógio).</li>
+          <li>A publicação sai em <b>até 2 minutos</b> depois do horário. Vídeos podem levar mais alguns minutos por conta, enquanto a rede processa.</li>
+          <li>As respostas trazem datas em <b>UTC</b>. Para mostrar no horário da Bahia:</li>
+        </ul>
+        <pre class="code" data-lang="code"><code>const quando = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Bahia", dateStyle: "short", timeStyle: "short" })
+  .format(new Date(post.scheduled_at)); // "20/09/2026, 18:00"</code></pre>
+      </section>
+
+      <section class="guia" id="requisitos" data-guia="Requisitos de mídia" data-grupo-nav="Publicar" data-busca="formato tamanho duração proporção codec mp4 jpeg resolução fps reels stories carrossel ffmpeg">
+        <span class="eyebrow-api">Publicar</span>
+        <h2>Requisitos de mídia de cada rede</h2>
+        <p>A API confere na hora as regras de <b>quantidade e combinação</b> (ex.: Reels com exatamente um vídeo). Já as regras do <b>arquivo</b> (formato, duração, tamanho, proporção) são conferidas pela rede no momento de publicar: se o arquivo estiver fora, aquela conta aparece como <b>falha</b> com o motivo. Seguindo as tabelas abaixo, isso não acontece.</p>
+
+        <h3>Instagram</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Tipo</th><th>Arquivo</th><th>Proporção</th><th>Tamanho e duração</th></tr></thead>
+          <tbody>
+            <tr><td>Foto (Feed e carrossel)</td><td>JPEG, sRGB. PNG e WebP são convertidos para JPEG antes de enviar (a não ser com <code>skip_processing: true</code>).</td><td>De 4:5 a 1.91:1. Fora disso a rede corta. Ideal: 1080 × 1350 (4:5).</td><td>Até 8 MB. Largura de 320 a 1440 px.</td></tr>
+            <tr><td>Reels (e vídeo no Feed)</td><td>MP4 ou MOV · vídeo H.264 ou HEVC · áudio AAC até 48 kHz · 23 a 60 fps · até 25 Mbps</td><td>9:16 recomendado (1080 × 1920); aceita de 0.01:1 a 10:1 com faixas</td><td>3 s a 15 min · até 300 MB · até 1920 px de largura</td></tr>
+            <tr><td>Stories: foto</td><td>JPEG, sRGB</td><td>9:16 recomendado</td><td>Até 8 MB</td></tr>
+            <tr><td>Stories: vídeo</td><td>MP4 ou MOV, mesmos codecs do Reels</td><td>9:16 recomendado</td><td>3 s a 60 s · até 100 MB</td></tr>
+            <tr><td>Carrossel</td><td>Fotos e vídeos misturados</td><td>De preferência todos na mesma proporção</td><td>Até 10 itens</td></tr>
+          </tbody>
+        </table></div>
+        <ul>
+          <li>Um vídeo sozinho com <code>placement: "timeline"</code> sai como <b>Reels</b> e também aparece no Feed (<code>share_to_feed</code>).</li>
+          <li>Legenda: até 2.200 caracteres, <b>30 hashtags</b> e <b>20 @menções</b>. Em Stories a legenda não aparece.</li>
+          <li>A conta precisa ser <b>Profissional</b> (Empresa ou Criador).</li>
+        </ul>
+
+        <h3>Facebook (Páginas)</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Tipo</th><th>Arquivo</th><th>Regras</th></tr></thead>
+          <tbody>
+            <tr><td>Foto e carrossel</td><td>JPEG ou PNG</td><td>Carrossel <b>só de fotos</b>. Com <code>set_caption_for_each_image</code>, a legenda vai em cada foto.</td></tr>
+            <tr><td>Vídeo no Feed</td><td>MP4 recomendado</td><td>Um vídeo por publicação.</td></tr>
+            <tr><td>Reels</td><td>MP4 · 9:16 · mínimo 540 × 960 (ideal 1080 × 1920) · 24 a 60 fps · áudio AAC 48 kHz estéreo, 128 kbps ou mais</td><td>3 s a 90 s · no máximo 30 Reels pela API a cada 24 horas por Página.</td></tr>
+            <tr><td>Stories: foto</td><td>JPEG, PNG, BMP, GIF ou TIFF · até 10 MB (PNG: até 1 MB para não pixelar)</td><td>Uma mídia por publicação.</td></tr>
+            <tr><td>Stories: vídeo</td><td>MP4 · 9:16 · mínimo 540 × 960 · 24 a 60 fps</td><td>3 s a 60 s · uma mídia por publicação.</td></tr>
+            <tr><td>Só texto</td><td>Sem mídia</td><td>Só quando <b>todas</b> as contas da publicação são Páginas do Facebook.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>TikTok</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Tipo</th><th>Arquivo</th><th>Regras</th></tr></thead>
+          <tbody>
+            <tr><td>Vídeo</td><td>MP4 (recomendado), MOV ou WebM · H.264 (recomendado), H.265, VP8 ou VP9 · 23 a 60 fps · lados de 360 a 4096 px</td><td>Até 10 min e 4 GB · <b>um vídeo</b> por publicação.</td></tr>
+            <tr><td>Fotos</td><td>JPEG ou WebP (PNG pode falhar) · até 1080p · até 20 MB cada</td><td>De 1 a 32 fotos, <b>sem vídeo junto</b>.</td></tr>
+          </tbody>
+        </table></div>
+        <ul>
+          <li><code>placement</code> (Feed, Reels, Stories) não se aplica ao TikTok: ele recebe o vídeo ou as fotos do jeito que estão.</li>
+          <li>Título (<code>platform_options.tiktok.title</code>): até 85 caracteres. Vazio usa o começo da legenda.</li>
+          <li>Se o TikTok publicar como <b>privado</b>, confira <code>privacy_status</code>; perfis recém-conectados podem ter restrição do próprio TikTok.</li>
+        </ul>
+
+        <h3>Vídeo que funciona em todas as redes de uma vez</h3>
+        <p>Um arquivo com estas características serve para Reels do Instagram, Reels do Facebook e TikTok ao mesmo tempo:</p>
+        <ul>
+          <li><b>MP4</b>, vídeo <b>H.264</b>, áudio <b>AAC 48 kHz estéreo</b>, <b>30 fps</b>;</li>
+          <li><b>1080 × 1920</b> (9:16), entre <b>5 e 90 segundos</b>, até <b>100 MB</b>;</li>
+          <li>com o índice no começo do arquivo (<i>faststart</i>), para a rede começar a ler rápido.</li>
+        </ul>
+        <p>Para converter qualquer vídeo para esse padrão com o <a href="https://ffmpeg.org/download.html" target="_blank" rel="noopener">ffmpeg</a>:</p>
+        <pre class="code" data-lang="code"><code>ffmpeg -i entrada.mov \
+  -c:v libx264 -profile:v high -pix_fmt yuv420p -r 30 -b:v 8M -maxrate 10M -bufsize 16M \
+  -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2" \
+  -c:a aac -b:a 128k -ar 48000 -ac 2 \
+  -movflags +faststart saida.mp4</code></pre>
+
+        <h3>Links de mídia</h3>
+        <ul>
+          <li>Precisam ser <b>https</b>, <b>públicos</b> (abrir numa aba anônima sem login) e apontar para o <b>arquivo</b> em si, não para uma página (link de visualização do Google Drive ou Dropbox não serve).</li>
+          <li>O link precisa continuar funcionando <b>até a publicação sair em todas as contas</b>. Para agendamentos, prefira subir pelo <a href="#upload-url"><code>POST /media/upload-url</code></a>: o arquivo fica guardado com a gente.</li>
+          <li>Fotos que passaram pelo WhatsApp perdem resolução. Use o arquivo original.</li>
+        </ul>
+      </section>
+
+      <section class="guia" id="ciclo" data-guia="Ciclo de uma publicação" data-grupo-nav="Publicar" data-busca="status agendada publicando publicada falhou cancelada resultado">
+        <span class="eyebrow-api">Publicar</span>
+        <h2>Ciclo de uma publicação</h2>
+        <p>Uma publicação é <b>um post que vai para uma ou várias contas</b>. Ela tem um estado geral (<code>status</code>) e <b>cada conta tem o seu próprio resultado</b>: uma conta pode falhar enquanto as outras publicam.</p>
+        <div class="fluxo" aria-label="Estados de uma publicação"><span>POST /posts</span><i>→</i><span>scheduled</span><i>→ no horário →</i><span>processing</span><i>→</i><span>processed</span></div>
+
+        <h3>Estado da publicação (<code>status</code>)</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>status</th><th>Quer dizer</th><th>O que dá para fazer</th></tr></thead>
+          <tbody>
+            <tr><td><code>scheduled</code></td><td>Agendada, esperando o horário.</td><td><a href="#update-post">Editar</a>, <a href="#reschedule-post">mudar o horário</a> ou <a href="#cancel-post">cancelar</a>.</td></tr>
+            <tr><td><code>processing</code></td><td>Saindo agora nas contas.</td><td>Acompanhar; <a href="#sync-post">conferir</a>.</td></tr>
+            <tr><td><code>processed</code></td><td>O envio terminou. Veja o resultado de cada conta.</td><td><a href="#retry-post">Reenviar as que falharam</a>; ver o <a href="#metrics-posts">desempenho</a>.</td></tr>
+            <tr><td><code>canceled</code></td><td>Cancelada antes de sair.</td><td>Nada (continua no histórico).</td></tr>
+            <tr><td><code>error</code></td><td>Não chegou a ser enviada.</td><td>Criar de novo.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>Resultado em cada conta (<code>results[].status</code>)</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>status</th><th>Quer dizer</th><th>Aviso (webhook)</th></tr></thead>
+          <tbody>
+            <tr><td><code>pending</code></td><td>Esperando o horário ou a rede terminar.</td><td>—</td></tr>
+            <tr><td><code>published</code></td><td>Saiu. <code>permalink</code> tem o link do post e <code>platform_post_id</code> o id na rede.</td><td><code>post.published</code></td></tr>
+            <tr><td><code>failed</code></td><td>Não saiu. <code>error</code> explica o motivo em português.</td><td><code>post.failed</code></td></tr>
+          </tbody>
+        </table></div>
+        <p>Quando todas as contas têm resultado, sai <b>uma vez</b> o aviso <code>post.completed</code> com os totais e o status final: <code>published</code> (todas), <code>partial</code> (algumas) ou <code>failed</code> (nenhuma).</p>
+
+        <h3>Linha do tempo</h3>
+        <ol class="passos">
+          <li><code>POST /posts</code> responde <code>201</code> com <code>status: "scheduled"</code> (ou <code>"processing"</code> se for para agora).</li>
+          <li>No horário, o envio começa e cada conta publica por conta própria (vídeos podem levar alguns minutos a mais).</li>
+          <li>A cada conta que termina, chega <code>post.published</code> ou <code>post.failed</code> e <a href="#get-post"><code>GET /posts/{post_id}</code></a> já mostra o resultado.</li>
+          <li>Com todas prontas, chega <code>post.completed</code>. Se algo falhou, veja o motivo e use <a href="#retry-post">reenviar</a> ou crie uma publicação nova com o arquivo corrigido.</li>
+          <li>Os números do post (visualizações, curtidas…) começam a aparecer em <a href="#metrics-posts"><code>GET /metrics/posts</code></a> em até 3 horas.</li>
+        </ol>
+        <div class="callout warn"><b>Depois que começou a sair, não dá mais para editar nem cancelar.</b> Para corrigir um post já publicado, edite ou apague direto no aplicativo da rede.</div>
+      </section>
+
+      <section class="guia" id="videos" data-guia="Publicar vídeo (Reels e TikTok)" data-grupo-nav="Publicar" data-busca="vídeo video reels tiktok upload capa thumbnail enviar arquivo">
+        <span class="eyebrow-api">Guia prático</span>
+        <h2>Publicar vídeo: Reels no Instagram e no Facebook e vídeo no TikTok</h2>
+        <p>Uma única publicação pode levar o mesmo vídeo para contas das três redes. O passo a passo:</p>
+        <ol class="passos">
+          <li><b>Prepare o arquivo</b> seguindo o <a href="#requisitos">vídeo que funciona em todas as redes</a> (MP4, H.264, 1080 × 1920, 5 a 90 s).</li>
+          <li><b>Suba o vídeo</b> (e a capa, se tiver uma imagem de capa):
+            <div class="code-card" data-tabs>
+              <pre class="code" data-lang="code" data-tab="curl"><code># 1) pedir o endereço de envio
+UP=$(curl -sS -X POST "{BASE}/media/upload-url" -H "Authorization: Bearer $INSTAFLOW_KEY")
+
+# 2) enviar o arquivo (sem a chave da API neste passo)
+curl -sS --fail-with-body -X PUT "$(jq -r .upload_url <<< "$UP")" \
+  -H "Content-Type: video/mp4" --data-binary @promo.mp4
+
+# 3) este é o link para usar na publicação
+jq -r .media_url <<< "$UP"</code></pre>
+              <pre class="code" data-lang="code" data-tab="javascript"><code>import { readFile } from "node:fs/promises";
+
+async function subir(caminhoDoArquivo, tipo) {
+  const r = await fetch("{BASE}/media/upload-url", { method: "POST", headers: { Authorization: `Bearer ${process.env.INSTAFLOW_KEY}` } });
+  const { upload_url, media_url } = await r.json();
+  const envio = await fetch(upload_url, { method: "PUT", headers: { "Content-Type": tipo }, body: await readFile(caminhoDoArquivo) });
+  if (!envio.ok) throw new Error(`upload falhou: ${envio.status}`);
+  return media_url;
+}
+
+const video = await subir("promo.mp4", "video/mp4");
+const capa = await subir("capa.jpg", "image/jpeg"); // opcional</code></pre>
+              <pre class="code" data-lang="code" data-tab="python"><code>import os
+import requests
+
+def subir(caminho, tipo):
+    r = requests.post("{BASE}/media/upload-url", headers={"Authorization": f"Bearer {os.environ['INSTAFLOW_KEY']}"}, timeout=30)
+    r.raise_for_status()
+    dados = r.json()
+    with open(caminho, "rb") as arquivo:
+        requests.put(dados["upload_url"], data=arquivo, headers={"Content-Type": tipo}, timeout=600).raise_for_status()
+    return dados["media_url"]
+
+video = subir("promo.mp4", "video/mp4")
+capa = subir("capa.jpg", "image/jpeg")  # opcional</code></pre>
+            </div>
+          </li>
+          <li><b>Escolha a capa</b> (opcional): <code>thumbnail_url</code> com uma imagem JPEG, ou <code>thumbnail_timestamp_ms</code> com o instante do vídeo em milissegundos (ex.: <code>1500</code> = 1,5 s). Sem capa, a rede usa o primeiro quadro.</li>
+          <li><b>Escolha as contas</b>: <code>account_ids</code> com os ids de <a href="#list-accounts"><code>GET /accounts</code></a> e/ou <code>group_ids</code>.</li>
+          <li><b>Monte a publicação</b> com <code>placement: "reels"</code>. As opções de cada rede ficam em <code>platform_options</code> e só valem para as contas daquela rede:
+            <pre class="code" data-lang="json"><code>{
+  "title": "Reels da promoção de sexta",
+  "caption": "Promoção de sexta: tudo com 20% off! 🔥\n\nCorre que é só hoje.\n\n#ofertas #sexta",
+  "placement": "reels",
+  "media": [
+    { "url": "https://data.postforme.dev/storage/v1/object/public/post-media/…/a1b2c3", "kind": "video", "thumbnail_timestamp_ms": 1500 }
+  ],
+  "group_ids": ["3c9e7a1b-5d2f-4b8e-9a6c-1f0d8e7b2c45"],
+  "scheduled_at": "2026-09-20T18:00",
+  "vary_captions": true,
+  "platform_options": {
+    "instagram": { "share_to_feed": true, "collaborators": ["parceiro"] },
+    "tiktok": { "title": "Promo de sexta 🔥", "privacy_status": "public", "allow_comment": true, "allow_duet": false, "allow_stitch": false }
+  }
+}</code></pre>
+          </li>
+          <li><b>Teste com <code>"dry_run": true</code></b> e, estando certo, <b>mande de verdade</b> com uma <code>Idempotency-Key</code>.</li>
+          <li><b>Acompanhe</b> pelos webhooks ou por <a href="#get-post"><code>GET /posts/{post_id}</code></a>.</li>
+        </ol>
+
+        <h3>Outros jeitos de publicar vídeo</h3>
+        <ul>
+          <li><b>Vídeo no Feed</b>: <code>placement: "timeline"</code>. No Instagram sai como Reels e aparece no Feed; no Facebook sai como vídeo da Página.</li>
+          <li><b>Stories</b>: <code>placement: "stories"</code>, vídeo de 3 a 60 s. No Facebook, uma mídia por publicação.</li>
+          <li><b>Só TikTok</b>: escolha só contas de TikTok. O <code>placement</code> é ignorado.</li>
+          <li><b>Carrossel com vídeo</b>: só no Instagram (no Facebook o carrossel é só de fotos e no TikTok não mistura foto com vídeo).</li>
+        </ul>
+
+        <h3>Quando o vídeo falha</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>O erro diz algo como</th><th>Causa provável</th><th>Como resolver</th></tr></thead>
+          <tbody>
+            <tr><td>"não conseguiu baixar a mídia"</td><td>Link não público, expirado ou apontando para uma página</td><td>Suba por <code>/media/upload-url</code>; teste o link numa aba anônima.</td></tr>
+            <tr><td>formato, codec ou "processamento"</td><td>HEVC 10 bits, ProRes, taxa de quadros variável, áudio fora do padrão</td><td>Converta com o comando <code>ffmpeg</code> dos <a href="#requisitos">requisitos</a>.</td></tr>
+            <tr><td>duração</td><td>Menos de 3 s, ou acima do limite (Stories 60 s, Reels do Facebook 90 s)</td><td>Corte o vídeo.</td></tr>
+            <tr><td>proporção ou resolução</td><td>Vídeo horizontal ou pequeno demais para Reels</td><td>Exporte em 1080 × 1920 (9:16).</td></tr>
+            <tr><td>limite de publicações</td><td>A conta passou do limite de 24 horas da rede</td><td>Espere e reenvie; veja <a href="#limites">Limites</a>.</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section class="guia" id="fotos" data-guia="Fotos, carrossel e Stories" data-grupo-nav="Publicar" data-busca="foto imagem carrossel carousel stories story álbum">
+        <span class="eyebrow-api">Guia prático</span>
+        <h2>Fotos, carrossel e Stories</h2>
+
+        <h3>Uma foto ou carrossel</h3>
+        <ul>
+          <li><code>placement: "timeline"</code> e as fotos em <code>media</code>, <b>na ordem em que devem aparecer</b>.</li>
+          <li><b>Instagram</b>: até 10 itens. A primeira foto define a proporção do carrossel inteiro: deixe todas iguais (ideal 1080 × 1350, 4:5).</li>
+          <li><b>Facebook</b>: carrossel só de fotos. <code>set_caption_for_each_image: true</code> repete a legenda em cada foto.</li>
+          <li><b>TikTok</b>: de 1 a 32 fotos (JPEG ou WebP), sem vídeo junto. <code>auto_add_music</code> coloca música automática.</li>
+          <li>O painel tem o <b>✂ Ajustar</b> para cortar; pela API, mande as fotos já no tamanho certo.</li>
+        </ul>
+        <pre class="code" data-lang="json"><code>{
+  "caption": "Chegaram as novidades da semana 🛍️ Arraste para ver todas.\n\n#novidades",
+  "placement": "timeline",
+  "media": [
+    { "url": "https://data.postforme.dev/…/foto-1", "kind": "image" },
+    { "url": "https://data.postforme.dev/…/foto-2", "kind": "image" },
+    { "url": "https://data.postforme.dev/…/foto-3", "kind": "image" }
+  ],
+  "account_ids": ["spc_Lj3Kd82hQx1mNp4", "spc_Fb2Gs9Kw4Mq6Nd1", "spc_Tk5Hn7Jd1Lc3Vx8"],
+  "scheduled_at": "2026-09-21T09:00",
+  "platform_options": {
+    "facebook": { "set_caption_for_each_image": false },
+    "tiktok": { "title": "Novidades da semana", "auto_add_music": true }
+  }
+}</code></pre>
+
+        <h3>Stories</h3>
+        <ul>
+          <li><code>placement: "stories"</code>, com foto ou vídeo vertical (9:16). Vídeo de 3 a 60 s.</li>
+          <li><b>Instagram</b>: cada item de <code>media</code> vira um Story, em sequência.</li>
+          <li><b>Facebook</b>: uma mídia por publicação.</li>
+          <li>A <b>legenda não aparece</b> em Stories, e links e figurinhas não são colocados pela API.</li>
+        </ul>
+        <div class="callout warn"><b>TikTok não tem Stories pela API.</b> Se a publicação de Stories incluir contas de TikTok, elas recebem um post normal. Para Stories, escolha só contas de Instagram e Facebook.</div>
+        <pre class="code" data-lang="json"><code>{
+  "caption": "",
+  "placement": "stories",
+  "media": [{ "url": "https://data.postforme.dev/…/story-vertical", "kind": "video" }],
+  "account_ids": ["spc_Lj3Kd82hQx1mNp4", "spc_Fb2Gs9Kw4Mq6Nd1"]
+}</code></pre>
+      </section>
+
+      <section class="guia" id="legendas" data-guia="Legendas" data-grupo-nav="Publicar" data-busca="legenda caption texto hashtag menção emoji título por conta overrides colaboradores">
+        <span class="eyebrow-api">Guia prático</span>
+        <h2>Legendas</h2>
+        <ul>
+          <li><code>caption</code> é a legenda de todas as contas: até <b>2.200 caracteres</b>, com emojis, <code>#hashtags</code> e <code>@menções</code>.</li>
+          <li>No JSON, quebra de linha é <code>\n</code> e aspas dentro do texto são <code>\"</code>. Toda boa biblioteca faz isso sozinha quando você monta o objeto e usa <code>JSON.stringify</code> (JavaScript) ou <code>json=</code> (Python).</li>
+          <li><b>Instagram</b> aceita no máximo 30 hashtags e 20 @menções por post. Passou disso, a conta falha.</li>
+          <li><b>TikTok</b> tem ainda o título (<code>platform_options.tiktok.title</code>, até 85 caracteres).</li>
+          <li><b>Colaboradores</b> no Instagram: <code>platform_options.instagram.collaborators</code>, até 3 usuários.</li>
+          <li>Primeiro comentário não é feito pela API: coloque as hashtags na própria legenda.</li>
+        </ul>
+
+        <h3>Legenda própria para cada conta</h3>
+        <p><code>caption_overrides</code> recebe <code>{ "id_da_conta": "legenda" }</code>. Contas que não estão ali usam <code>caption</code>. Todo id do objeto precisa estar entre as contas da publicação.</p>
+        <pre class="code" data-lang="json"><code>{
+  "caption": "Promoção de sexta: tudo com 20% off! 🔥 #ofertas",
+  "account_ids": ["spc_Lj3Kd82hQx1mNp4", "spc_Pq8Wm2Zt6Rv9Yb3"],
+  "caption_overrides": {
+    "spc_Pq8Wm2Zt6Rv9Yb3": "Aqui na Loja Norte a sexta é de 20% off em tudo! 🔥 #ofertas #lojanorte"
+  },
+  "media": [{ "url": "https://data.postforme.dev/…/foto", "kind": "image" }]
+}</code></pre>
+        <p>Não quer escrever uma por uma? Use as <a href="#variacoes">variações automáticas</a>.</p>
+      </section>
+
+      <section class="guia" id="variacoes" data-guia="Variações de legenda" data-grupo-nav="Publicar" data-busca="variação variar legenda diferente ia inteligência artificial gemini repetida duplicada">
+        <span class="eyebrow-api">Guia prático</span>
+        <h2>Variações de legenda: uma diferente para cada conta</h2>
+        <p>O mesmo texto em muitas contas parece repetição para as redes e para quem segue mais de uma conta. As variações reescrevem a legenda para cada conta, <b>com o mesmo sentido</b>.</p>
+
+        <h3>Jeito 1: direto na publicação</h3>
+        <p>Mande <code>"vary_captions": true</code> no <a href="#create-post"><code>POST /posts</code></a>. A primeira conta fica com a legenda original e cada outra ganha uma versão. Contas que você já colocou em <code>caption_overrides</code> ficam com a sua legenda. A resposta mostra as legendas escolhidas e um resumo em <code>variations</code>.</p>
+        <pre class="code" data-lang="json"><code>{
+  "caption": "Continue firme, Big! Vamos juntos pela Bahia 💪 #Bahia #44144",
+  "account_ids": ["spc_Lj3Kd82hQx1mNp4", "spc_Pq8Wm2Zt6Rv9Yb3", "spc_Tk5Hn7Jd1Lc3Vx8"],
+  "media": [{ "url": "https://data.postforme.dev/…/foto", "kind": "image" }],
+  "vary_captions": true,
+  "dry_run": true
+}</code></pre>
+        <div class="callout"><b>Use <code>dry_run</code> para ler antes.</b> Com <code>"dry_run": true</code> as variações já aparecem em <code>caption_overrides</code> na resposta, sem publicar. Gostou? Mande a mesma coisa sem o <code>dry_run</code> (as versões são geradas de novo) ou copie o <code>caption_overrides</code> que voltou para publicar exatamente aquelas.</div>
+
+        <h3>Jeito 2: gerar, revisar e publicar</h3>
+        <ol class="passos">
+          <li>Chame <a href="#vary-captions"><code>POST /captions/vary</code></a> com a legenda e quantas versões quer (normalmente o número de contas menos 1).</li>
+          <li>Mostre as versões para alguém aprovar ou editar no seu sistema.</li>
+          <li>Publique mandando as aprovadas em <code>caption_overrides</code>.</li>
+        </ol>
+
+        <h3>Com IA ou sem IA</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th><code>mode</code></th><th>Como gera</th><th>Quando usar</th></tr></thead>
+          <tbody>
+            <tr><td><code>auto</code> (padrão)</td><td>A IA do time reescreve; se ela não estiver ligada, falhar ou devolver menos versões, o gerador automático completa e <code>warning</code> avisa.</td><td>Quase sempre.</td></tr>
+            <tr><td><code>ai</code></td><td>Só a IA. Sem IA ligada, <code>409 sem_ia</code>; com cota esgotada, <code>429</code>.</td><td>Quando você prefere erro a uma variação mais simples.</td></tr>
+            <tr><td><code>local</code></td><td>Só o gerador automático: grátis e instantâneo. Troca expressões comuns ("continue firme" → "siga firme"), muda a ordem de vocativo, quebras de linha, emojis equivalentes e a ordem das hashtags.</td><td>Legendas longas, sem IA configurada.</td></tr>
+          </tbody>
+        </table></div>
+        <p>O gerador automático não inventa frases: numa legenda curta, com pouca coisa para trocar, algumas versões só ganham um emoji (o campo <code>weak</code> conta quantas). Para reescrita de verdade em legendas curtas, <b>ligue a IA</b>.</p>
+
+        <h3>O que nunca muda</h3>
+        <ul>
+          <li><b>Números</b> (preços, porcentagens, datas, números como 44144), <b>@menções</b>, <b>links</b> e o conjunto de <b>#hashtags</b> (a ordem pode mudar). Versão da IA que mexa nisso é descartada.</li>
+          <li>Cor de coração e bandeiras de emoji. A IA não pode acrescentar fatos, promessas ou hashtags.</li>
+          <li>Versão igual à original, ou diferente só em emoji e pontuação, é descartada.</li>
+        </ul>
+
+        <h3>Ligar a IA (grátis com o Google)</h3>
+        <ol class="passos">
+          <li>Entre em <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> com uma conta Google e clique em <b>Create API key</b>.</li>
+          <li>Copie a chave (começa com <code>AIza</code>).</li>
+          <li>No InstaFlow, abra <a href="../config/#ia">Config → Variações de legenda com IA</a>, cole e clique em <b>Salvar e testar</b>. Só o dono ou um admin faz isso.</li>
+        </ol>
+        <p>Também aceita chaves da <b>Groq</b> (<code>gsk_</code>), <b>OpenAI</b> (<code>sk-</code>), <b>Anthropic</b> (<code>sk-ant-</code>) e <b>OpenRouter</b> (<code>sk-or-</code>). A chave fica guardada no servidor e nunca volta para o navegador nem para a API (<a href="#get-ai"><code>GET /ai</code></a> mostra só o começo e o fim). Chaves do GitHub não servem: o GitHub não gera texto. No plano grátis do Google, os textos enviados podem ser usados por ele para melhorar os produtos.</p>
+
+        <h3>Resposta</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Campo</th><th>O que diz</th></tr></thead>
+          <tbody>
+            <tr><td><code>variations</code></td><td>As versões, na ordem (primeiro as da IA).</td></tr>
+            <tr><td><code>source</code></td><td><code>ai</code>, <code>local</code>, <code>mixed</code> (IA + gerador automático) ou <code>none</code>.</td></tr>
+            <tr><td><code>ai_count</code> / <code>local_count</code></td><td>Quantas vieram de cada um.</td></tr>
+            <tr><td><code>weak</code></td><td>Quantas do gerador automático só ganharam um emoji.</td></tr>
+            <tr><td><code>provider_label</code> / <code>model</code></td><td>IA usada, quando usada.</td></tr>
+            <tr><td><code>warning</code></td><td>Por que a IA não foi usada (desligada, cota, sem resposta), quando for o caso.</td></tr>
+          </tbody>
+        </table></div>
+        <p>Limites: até 49 versões por chamada e 150 gerações com IA por time a cada 24 horas.</p>
+      </section>
+
+      <section class="guia" id="contas-grupos" data-guia="Contas e grupos" data-grupo-nav="Publicar" data-busca="conectar conta instagram facebook tiktok reconectar desconectada grupo">
+        <span class="eyebrow-api">Guia prático</span>
+        <h2>Contas e grupos</h2>
+        <h3>Conectar uma conta pelo seu sistema</h3>
+        <ol class="passos">
+          <li>Chame <a href="#connect-account"><code>POST /accounts/connect</code></a> com a rede (<code>instagram</code>, <code>facebook</code> ou <code>tiktok</code>).</li>
+          <li>Abra o <code>url</code> que voltar no navegador de quem é dono da conta. A autorização usa a conta que estiver aberta naquele navegador.</li>
+          <li>A pessoa autoriza. <b>Instagram</b>: conta Profissional (Empresa ou Criador). <b>Facebook</b>: marque as Páginas; cada Página vira uma conta. <b>TikTok</b>: perfil pessoal ou de criador.</li>
+          <li>Em poucos segundos a conta aparece em <a href="#list-accounts"><code>GET /accounts</code></a> e chega o webhook <code>account.updated</code>.</li>
+        </ol>
+        <ul>
+          <li>Conta com <code>status: "disconnected"</code> precisa ser <b>reconectada</b>: mesmo caminho, com <code>"reconnect": true</code>. Publicações agendadas para ela falham até lá.</li>
+          <li>As chaves de acesso de cada conta são renovadas sozinhas (<code>access_token_expires_at</code>).</li>
+          <li>Apelidos das contas são definidos no painel e aparecem em <code>label</code>.</li>
+          <li>Remover uma conta com histórico a deixa <b>arquivada</b> (<code>archived: true</code>): o histórico continua.</li>
+        </ul>
+        <h3>Grupos</h3>
+        <p>Grupos juntam contas ("Lojas da Bahia", "Clientes do plano ouro"). Crie com <a href="#create-group"><code>POST /groups</code></a> e publique com <code>group_ids</code>: as contas de todos os grupos entram, sem repetir, junto com as de <code>account_ids</code>.</p>
+      </section>
+
+      <section class="guia" id="webhooks" data-guia="Webhooks" data-grupo-nav="Avisos e integrações" data-busca="webhook aviso evento assinatura hmac signature notificação callback">
+        <span class="eyebrow-api">Avisos</span>
+        <h2>Webhooks: receba um aviso quando algo acontecer</h2>
+        <p>Em vez de ficar perguntando se já publicou, cadastre uma URL do seu sistema. O InstaFlow manda um <code>POST</code> com JSON para ela a cada evento.</p>
+
+        <h3>Cadastrar</h3>
+        <ul>
+          <li>No painel, em <a href="../config/#api-card">Config → API e integrações → Webhooks</a>, ou pela API com <a href="#create-webhook"><code>POST /webhooks</code></a>.</li>
+          <li>A URL precisa ser <b>https</b>. Até 10 webhooks por time, cada um com os eventos que quiser.</li>
+          <li>Guarde o <b>segredo</b> (<code>whsec_…</code>) que aparece ao cadastrar: é com ele que você confere que o aviso veio mesmo do InstaFlow.</li>
+        </ul>
+
+        <h3>Eventos</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Evento</th><th>Quando chega</th></tr></thead>
+          <tbody>
+            <tr><td><code>post.published</code></td><td>A publicação saiu numa conta (um aviso por conta).</td></tr>
+            <tr><td><code>post.failed</code></td><td>A publicação falhou numa conta, com o motivo.</td></tr>
+            <tr><td><code>post.completed</code></td><td>Todas as contas da publicação têm resultado. Chega uma vez só.</td></tr>
+            <tr><td><code>account.updated</code></td><td>Uma conta foi conectada, reconectada, desconectada ou removida.</td></tr>
+            <tr><td><code>ping</code></td><td>Só no teste (botão Testar ou <a href="#test-webhook"><code>POST /webhooks/{webhook_id}/test</code></a>).</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>O que chega na sua URL</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Cabeçalho</th><th>Valor</th></tr></thead>
+          <tbody>
+            <tr><td><code>Content-Type</code></td><td><code>application/json</code></td></tr>
+            <tr><td><code>User-Agent</code></td><td><code>InstaFlow-Webhooks/1.0</code></td></tr>
+            <tr><td><code>X-InstaFlow-Event</code></td><td>O tipo do evento, ex.: <code>post.published</code>.</td></tr>
+            <tr><td><code>X-InstaFlow-Delivery</code></td><td>Id do evento (<code>evt_…</code>), igual ao <code>id</code> do corpo.</td></tr>
+            <tr><td><code>X-InstaFlow-Signature</code></td><td><code>t=&lt;segundos&gt;,v1=&lt;assinatura&gt;</code></td></tr>
+          </tbody>
+        </table></div>
+        <p>O corpo sempre tem <code>id</code>, <code>type</code>, <code>created_at</code>, <code>team_id</code> e <code>data</code>. Exemplos de cada evento:</p>
+        <div id="eventos-webhook"></div>
+
+        <h3>Responder, repetições e ordem</h3>
+        <ul>
+          <li>Responda com qualquer status <b>2xx em até 10 segundos</b>. Tem trabalho pesado? Guarde o evento e processe depois.</li>
+          <li>Sem 2xx (ou sem resposta), tentamos de novo: <b>3 tentativas</b> (na hora, depois de 1 s e depois de 5 s).</li>
+          <li><b>50 eventos seguidos sem sucesso pausam o webhook.</b> Corrija a URL e ative de novo no painel (ou <code>PUT /webhooks/{webhook_id}</code> com <code>"active": true</code>).</li>
+          <li>O mesmo evento pode chegar <b>mais de uma vez</b>: ignore <code>id</code> repetido.</li>
+          <li>A ordem não é garantida. Use <code>created_at</code> e, na dúvida, confira em <a href="#get-post"><code>GET /posts/{post_id}</code></a>.</li>
+          <li>Cada entrega fica registrada por 30 dias: <a href="#webhook-deliveries"><code>GET /webhooks/{webhook_id}/deliveries</code></a>.</li>
+        </ul>
+
+        <h3>Conferir a assinatura</h3>
+        <ol class="passos">
+          <li>Leia o corpo <b>cru</b>, exatamente como chegou (antes de transformar em JSON).</li>
+          <li>Do cabeçalho <code>X-InstaFlow-Signature</code>, separe <code>t</code> e <code>v1</code>.</li>
+          <li>Calcule HMAC-SHA256 com o segredo do webhook sobre o texto <code>t + "." + corpo</code>, em hexadecimal.</li>
+          <li>Compare com <code>v1</code> usando comparação de tempo constante. Diferente = recuse.</li>
+          <li>Recuse também se <code>t</code> estiver a mais de 5 minutos do seu relógio (protege contra reenvio de avisos antigos).</li>
+        </ol>
+        <div class="code-card" data-tabs>
+          <pre class="code" data-lang="code" data-tab="javascript"><code>// Node + Express: npm install express
+import crypto from "node:crypto";
+import express from "express";
+
+const app = express();
+const SEGREDO = process.env.INSTAFLOW_WEBHOOK_SECRET; // whsec_…
+const processados = new Set(); // em produção, guarde no seu banco
+
+// express.raw: o corpo chega cru, do jeito que foi assinado
+app.post("/webhooks/instaflow", express.raw({ type: "application/json" }), (req, res) => {
+  const assinatura = req.get("X-InstaFlow-Signature") ?? "";
+  const t = /t=(\d+)/.exec(assinatura)?.[1];
+  const v1 = /v1=([0-9a-f]{64})/.exec(assinatura)?.[1];
+  const corpo = req.body.toString("utf8");
+  const esperado = crypto.createHmac("sha256", SEGREDO).update(`${t}.${corpo}`).digest("hex");
+  const confere = t &amp;&amp; v1 &amp;&amp; crypto.timingSafeEqual(Buffer.from(v1, "hex"), Buffer.from(esperado, "hex"));
+  if (!confere || Math.abs(Date.now() / 1000 - Number(t)) > 300) return res.status(400).send("assinatura inválida");
+
+  const evento = JSON.parse(corpo);
+  res.sendStatus(200); // responde logo e processa em seguida
+  if (processados.has(evento.id)) return;
+  processados.add(evento.id);
+
+  if (evento.type === "post.published") console.log("publicou em", evento.data.username, evento.data.permalink);
+  if (evento.type === "post.failed") console.log("falhou em", evento.data.username, evento.data.error);
+  if (evento.type === "post.completed") console.log("terminou:", evento.data.status, evento.data.targets);
+});
+
+app.listen(3000);</code></pre>
+          <pre class="code" data-lang="code" data-tab="python"><code># Python + Flask: pip install flask
+import hashlib
+import hmac
+import json
+import os
+import time
+from flask import Flask, abort, request
+
+app = Flask(__name__)
+SEGREDO = os.environ["INSTAFLOW_WEBHOOK_SECRET"].encode()
+
+@app.post("/webhooks/instaflow")
+def instaflow():
+    corpo = request.get_data()  # corpo cru, do jeito que foi assinado
+    partes = dict(p.split("=", 1) for p in request.headers.get("X-InstaFlow-Signature", "").split(",") if "=" in p)
+    t, v1 = partes.get("t", ""), partes.get("v1", "")
+    esperado = hmac.new(SEGREDO, f"{t}.".encode() + corpo, hashlib.sha256).hexdigest()
+    if not t.isdigit() or not hmac.compare_digest(v1, esperado) or abs(time.time() - int(t)) > 300:
+        abort(400)
+    evento = json.loads(corpo)
+    if evento["type"] == "post.failed":
+        print("falhou em", evento["data"]["username"], evento["data"]["error"])
+    return "", 200</code></pre>
+          <pre class="code" data-lang="code" data-tab="php"><code>&lt;?php
+$segredo = getenv("INSTAFLOW_WEBHOOK_SECRET");
+$corpo = file_get_contents("php://input"); // corpo cru, do jeito que foi assinado
+$cabecalho = $_SERVER["HTTP_X_INSTAFLOW_SIGNATURE"] ?? "";
+preg_match('/t=(\d+)/', $cabecalho, $t);
+preg_match('/v1=([0-9a-f]{64})/', $cabecalho, $v1);
+$esperado = hash_hmac("sha256", ($t[1] ?? "") . "." . $corpo, $segredo);
+if (empty($t) || empty($v1) || !hash_equals($esperado, $v1[1]) || abs(time() - (int) $t[1]) > 300) {
+  http_response_code(400);
+  exit("assinatura inválida");
+}
+$evento = json_decode($corpo, true);
+http_response_code(200);
+// use $evento["type"] e $evento["data"] aqui</code></pre>
+        </div>
+        <div class="callout"><b>Testando no seu computador?</b> A URL precisa ser pública. Use um túnel (como o cloudflared ou o ngrok) ou um inspetor de requisições para ver o aviso chegando, e clique em <b>Testar</b> no painel.</div>
+      </section>
+
+      <section class="guia" id="integracoes" data-guia="n8n, Make e Zapier" data-grupo-nav="Avisos e integrações" data-busca="n8n make integromat zapier automação sem código http request">
+        <span class="eyebrow-api">Integrações</span>
+        <h2>n8n, Make e Zapier</h2>
+        <p>Qualquer ferramenta que faça uma chamada HTTP conversa com a API. O segredo é sempre o mesmo: cabeçalho <code>Authorization</code> com <code>Bearer</code> e a chave, e corpo em JSON.</p>
+
+        <h3>n8n</h3>
+        <ol class="passos">
+          <li><b>Credencial</b>: em Credentials → New → <b>Header Auth</b>. Name: <code>Authorization</code>. Value: <code>Bearer ifk_…</code> (com a palavra Bearer e um espaço).</li>
+          <li><b>Chamar a API</b>: nó <b>HTTP Request</b> → Method <code>POST</code> → URL <code>{BASE}/posts</code> → Authentication: <i>Generic Credential Type</i> → <i>Header Auth</i> → a credencial. Ligue <i>Send Body</i>, escolha <i>JSON</i> e cole o corpo, usando expressões para os valores que vêm de nós anteriores.</li>
+          <li><b>Evitar duplicado</b>: em <i>Send Headers</i>, adicione <code>Idempotency-Key</code> com um valor único do item (ex.: <code>{{ $json.id }}-{{ $json.data }}</code>). Se o fluxo rodar de novo, não publica duas vezes.</li>
+          <li><b>Subir arquivo</b>: um HTTP Request <code>POST {BASE}/media/upload-url</code>; depois outro HTTP Request com Method <code>PUT</code>, URL <code>{{ $json.upload_url }}</code>, Body <i>n8n Binary File</i> (o campo binário do arquivo) e o cabeçalho <code>Content-Type</code> do arquivo; por fim use o <code>media_url</code> no corpo da publicação, com <code>"kind": "video"</code> ou <code>"image"</code>.</li>
+          <li><b>Receber avisos</b>: nó <b>Webhook</b> (POST), copie a <i>Production URL</i> e cadastre em Config → API e integrações → Webhooks. Ative o fluxo.</li>
+        </ol>
+
+        <h3>Make</h3>
+        <ol class="passos">
+          <li>Módulo <b>HTTP → Make a request</b>. URL: <code>{BASE}/posts</code>. Method: <code>POST</code>.</li>
+          <li>Headers: <code>Authorization</code> = <code>Bearer ifk_…</code> (e, se quiser, <code>Idempotency-Key</code>).</li>
+          <li>Body type: <i>Raw</i>. Content type: <i>JSON (application/json)</i>. Request content: o JSON da publicação. Marque <i>Parse response</i>.</li>
+          <li>Para receber avisos: módulo <b>Webhooks → Custom webhook</b>, copie a URL e cadastre no InstaFlow.</li>
+        </ol>
+
+        <h3>Zapier</h3>
+        <ol class="passos">
+          <li>Ação <b>Webhooks by Zapier → Custom Request</b>. Method: <code>POST</code>. URL: <code>{BASE}/posts</code>.</li>
+          <li>Data: o JSON da publicação. Headers: <code>Authorization</code> = <code>Bearer ifk_…</code> e <code>Content-Type</code> = <code>application/json</code>.</li>
+          <li>Para receber avisos: gatilho <b>Webhooks by Zapier → Catch Hook</b>, copie a URL e cadastre no InstaFlow.</li>
+        </ol>
+        <div class="callout warn"><b>Guarde a chave como credencial</b>, nunca escrita direto num campo que outras pessoas do workspace veem.</div>
+      </section>
+
+      <section class="guia" id="openapi" data-guia="OpenAPI, Postman e Insomnia" data-grupo-nav="Avisos e integrações" data-busca="openapi swagger postman insomnia sdk coleção importar">
+        <span class="eyebrow-api">Ferramentas</span>
+        <h2>OpenAPI, Postman e Insomnia</h2>
+        <p>O arquivo <b>OpenAPI 3.1</b> descreve cada rota, campo e exemplo desta documentação. Com ele você importa tudo de uma vez no Postman ou no Insomnia, ou gera um SDK.</p>
+        <p><button type="button" class="btn" data-openapi>Baixar OpenAPI (JSON)</button></p>
+        <ul>
+          <li><b>Postman</b>: Import → escolha o arquivo → vira uma coleção. Na aba <i>Authorization</i> da coleção, escolha <i>Bearer Token</i> com uma variável <code>{{INSTAFLOW_KEY}}</code>.</li>
+          <li><b>Insomnia</b>: Create → Import → escolha o arquivo.</li>
+          <li><b>SDK</b>: gere um cliente com o OpenAPI Generator, por exemplo:</li>
+        </ul>
+        <pre class="code" data-lang="code"><code>npx @openapitools/openapi-generator-cli generate -i instaflow-openapi-1.0.0.json -g typescript-fetch -o instaflow-sdk</code></pre>
+      </section>
+
+      <section class="guia" id="mudancas" data-guia="Histórico de versões" data-grupo-nav="Avisos e integrações" data-busca="changelog versão mudanças novidades">
+        <span class="eyebrow-api">Versões</span>
+        <h2>Histórico de versões</h2>
+        <h3>1.0.0 · 14/09/2026</h3>
+        <ul>
+          <li>Chaves de acesso por time: leitura e escrita, só leitura, presas a contas e limite por minuto.</li>
+          <li>Contas (listar, conectar, reconectar, desconectar, remover) e grupos.</li>
+          <li>Biblioteca e upload de arquivos (<code>/media/upload-url</code>), com o tipo reconhecido pelo próprio link.</li>
+          <li>Publicações em Instagram, Facebook e TikTok: agendar, editar, reagendar, cancelar, reenviar e conferir; <code>group_ids</code>, <code>vary_captions</code>, capa de vídeo e <code>dry_run</code>.</li>
+          <li>Variações de legenda (<code>auto</code>, <code>ai</code>, <code>local</code>), <code>Idempotency-Key</code>, desempenho das contas e dos posts, webhooks assinados.</li>
+        </ul>
+        <p>Mudanças que quebram integrações só acontecem numa nova versão (<code>/v2</code>), avisada com antecedência. Novidades compatíveis entram na v1 e aparecem aqui.</p>
+      </section>
+
+      <section class="guia" id="suporte" data-guia="Ajuda e suporte" data-grupo-nav="Avisos e integrações" data-busca="ajuda suporte problema request id">
+        <span class="eyebrow-api">Ajuda</span>
+        <h2>Ajuda e suporte</h2>
+        <ol class="passos">
+          <li>Confira a chave com <a href="#get-me"><code>GET /me</code></a>.</li>
+          <li>Teste a publicação com <code>"dry_run": true</code>: a mensagem de erro diz o que ajustar.</li>
+          <li>Veja o <code>code</code> na <a href="#erros">tabela de erros</a> e o resultado de cada conta na <b>Fila</b> do painel.</li>
+          <li>Ainda com problema? Mande para o suporte o <code>X-Request-Id</code>, o horário, a rota, o status e o <code>code</code>. <b>Nunca mande a sua chave.</b></li>
+        </ol>
+      </section>
+
+      <!-- GUIAS: continuação -->
+
+      <div id="referencia"></div>
+    </main>
+  </div>
+</div>
+<script type="module" src="../assets/api-docs.js"></script>
+</body>
+</html>

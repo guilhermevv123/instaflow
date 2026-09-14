@@ -2,9 +2,10 @@
 // O Post for Me espera a resposta em 1 segundo, então respondemos na hora e
 // processamos em segundo plano.
 
-import { friendlyError } from "../_shared/friendly.ts";
 import type { PfmAccount, PfmPost, PfmResult } from "../_shared/pfm.ts";
+import { applyResult, refreshPostStatus } from "../_shared/resultados.ts";
 import { background, serviceClient, teamOf, timingSafeEqual } from "../_shared/util.ts";
+import { emit } from "../_shared/webhooks-time.ts";
 
 type Db = ReturnType<typeof serviceClient>;
 
@@ -62,26 +63,10 @@ async function handle(db: Db, event: Event) {
   }
 }
 
+// Grava o resultado (e avisa os webhooks do time) e recalcula o estado do post.
 async function onResult(db: Db, r: PfmResult) {
-  if (!r?.post_id || !r.social_account_id) return;
-  const { data: post } = await db.from("posts").select("id").eq("pfm_post_id", r.post_id).maybeSingle();
-  if (!post) return;
-  await db.from("post_targets").upsert({
-    post_id: post.id,
-    account_id: r.social_account_id,
-    status: r.success ? "published" : "failed",
-    result_id: r.id,
-    permalink: r.platform_data?.url ?? null,
-    platform_post_id: r.platform_data?.id ?? null,
-    error: r.success ? null : friendlyError(r.error),
-    details: r.success ? null : { error: r.error, details: r.details },
-    published_at: r.success ? new Date().toISOString() : null,
-  }, { onConflict: "post_id,account_id" });
-
-  const { data: targets } = await db.from("post_targets").select("status").eq("post_id", post.id);
-  const pending = (targets ?? []).filter((t) => t.status === "pending").length;
-  if (pending === 0) await db.from("posts").update({ status: "processed" }).eq("id", post.id);
-  else await db.from("posts").update({ status: "processing" }).eq("id", post.id);
+  const applied = await applyResult(db, r);
+  if (applied) await refreshPostStatus(db, applied.postId);
 }
 
 async function onPost(db: Db, p: PfmPost) {
@@ -122,4 +107,5 @@ async function onAccount(db: Db, a: PfmAccount) {
     metadata: a.metadata ?? null,
     synced_at: new Date().toISOString(),
   }, { onConflict: "id" });
+  background(emit(db, teamId, "account.updated", { account_id: a.id, platform: a.platform, username: a.username, status: a.status, access_token_expires_at: a.access_token_expires_at || null }).catch((e) => console.error("webhooks", e)));
 }

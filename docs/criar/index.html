@@ -347,7 +347,7 @@
     genBtn.dataset.busy = "1"; genBtn.disabled = true; genBtn.innerHTML = `<span class="spinner"></span> Criando ${ids.length} legendas…`;
     let variacoes = [], fonte = "local", provider = null, completadas = 0, fracas = 0, aviso = null;
     try {
-      const r = await api("/captions/vary", { method: "POST", body: { caption: base, count: precisa } });
+      const r = await api("/captions/vary", { method: "POST", body: { caption: base, count: precisa, mode: "ai" } });
       variacoes = (r.variations || []).filter((v) => typeof v === "string" && v.trim());
       if (variacoes.length) { fonte = "ia"; provider = r.provider_label || r.provider; }
     } catch (err) {

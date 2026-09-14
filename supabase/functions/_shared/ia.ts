@@ -21,6 +21,9 @@ export const PROVIDERS: Record<Provider, { label: string; base: string; models: 
   openai: { label: "OpenAI", base: "https://api.openai.com/v1", models: ["gpt-4.1-mini", "gpt-4o-mini"] },
 };
 
+// Chave que NÃO é de IA (o GitHub Models foi desativado em 2026; o gh/GitHub não gera texto).
+export const isGithubToken = (key: string) => /^(gh[pousr]_|github_pat_)/.test(key.trim());
+
 export function detectProvider(key: string): Provider | null {
   const k = key.trim();
   if (/^AIza[0-9A-Za-z_-]{20,}$/.test(k)) return "gemini";
@@ -176,8 +179,8 @@ export function promptVariacoes(caption: string, count: number): { system: strin
     "2. Não invente fatos, promessas, números, datas, lugares, nomes, @menções nem links, e não acrescente hashtags.",
     "3. Copie exatamente, sem mudar nenhum caractere, todos os números (por exemplo 44144), @menções, links e #hashtags do original. As hashtags do fim podem trocar de ordem.",
     "4. Emojis: pode trocar por equivalentes ou mudar de lugar, mas não troque a cor de corações nem bandeiras, e não coloque emoji se o original não tem.",
-    "5. Tamanho parecido com o original (entre 80% e 120% dos caracteres) e quebras de linha no mesmo estilo.",
-    "6. Cada versão precisa ser claramente diferente do original e das outras: mude a abertura, a ordem das ideias e as palavras, sem mudar o sentido.",
+    "5. Tamanho parecido com o original (entre 80% e 120% dos caracteres) e quebras de linha no mesmo estilo. Se a legenda tiver menos de 80 caracteres, cada versão pode ter até o dobro do tamanho, com uma frase curta de reforço no mesmo sentido (sem fatos novos).",
+    "6. Cada versão precisa ser claramente diferente do original e das outras: mude a abertura, a ordem das ideias e as palavras, sem mudar o sentido. Trocar só emoji ou pontuação não conta como versão diferente.",
     "7. Não use aspas em volta, não numere, não explique nada.",
     'Responda somente com JSON no formato {"variacoes": ["versão 1", "versão 2"]}.',
   ].join("\n");
@@ -215,9 +218,14 @@ const limpaUrl = (u: string) => u.replace(/[.,!?;:)\]]+$/, "");
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// Só as palavras, números, @ e # (sem emoji, pontuação, "!!1" e ordem de espaços).
+export const soPalavras = (s: string) =>
+  norm(s).replace(/(?<=[!?])1+(?![\p{L}\p{N}])/gu, "").replace(/[^\p{L}\p{N}#@\s]/gu, " ").replace(/\s+/g, " ").trim();
+
 export function tokens(text: string) {
   const urls = [...text.matchAll(RE_URL)].map((m) => limpaUrl(m[0]));
-  const semUrl = text.replace(RE_URL, " ");
+  // "!!1" é pontuação de brincadeira, não número que precisa ficar igual
+  const semUrl = text.replace(RE_URL, " ").replace(/(?<=[!?])1+(?![\p{L}\p{N}])/gu, " ");
   const mencoes = [...semUrl.matchAll(RE_MEN)].map((m) => m[0].toLowerCase());
   const tags = [...semUrl.matchAll(RE_TAG)].map((m) => m[0]);
   const nums = [...semUrl.replace(RE_MEN, " ").replace(RE_TAG, " ").matchAll(RE_NUM)].map((m) => m[0]);
@@ -228,7 +236,7 @@ export function validarVariacoes(original: string, candidatas: string[], max: nu
   const o = tokens(original);
   const oNums = new Set(o.nums), oMen = new Set(o.mencoes), oUrls = new Set(o.urls);
   const oTags = new Map(o.tags.map((t) => [t.toLowerCase(), t]));
-  const vistos = new Set([norm(original)]);
+  const vistos = new Set([norm(original), `w:${soPalavras(original)}`]);
   const out: string[] = [];
   for (let c of candidatas) {
     if (out.length >= max) break;
@@ -247,8 +255,11 @@ export function validarVariacoes(original: string, candidatas: string[], max: nu
     c = c.split("\n").map((l) => l.replace(/[ \t]+$/, "")).join("\n").replace(/\n{3,}/g, "\n\n").trim();
     if (!c || c.length > 2200) continue;
     const k = norm(c);
-    if (vistos.has(k)) continue;
+    // igual ao original (ou a outra versão) tirando emojis e pontuação = não é variação de verdade
+    const kPalavras = `w:${soPalavras(c)}`;
+    if (vistos.has(k) || vistos.has(kPalavras)) continue;
     vistos.add(k);
+    vistos.add(kPalavras);
     out.push(c);
   }
   return out;

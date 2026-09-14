@@ -44,8 +44,9 @@ function fakeDb() {
   };
   return { db: db as unknown as SupabaseClient, st };
 }
-const dono: Caller = { id: "u1", email: "dono@x", teamId: "t1", teamName: "Time", role: "owner", maxAccounts: 20, maxPostsMonth: 1000 };
+const dono: Caller = { id: "u1", email: "dono@x", teamId: "t1", teamName: "Time", role: "owner", maxAccounts: 20, maxPostsMonth: 1000, via: "jwt" };
 const editor: Caller = { ...dono, id: "u2", role: "editor" };
+const chave: Caller = { ...dono, id: null, email: "chave:teste", role: "api", via: "key" };
 const KEY = "AIzaSyA1234567890abcdefghijklmnopqrstu";
 const httpErr = (status: number, code?: string) => (e: unknown) => e instanceof HttpError && e.status === status && (code === undefined || e.code === code);
 
@@ -79,15 +80,16 @@ Deno.test("salvar com a cota do dia esgotada: grava e avisa", async () => {
   assert.equal(off.configured, false);
 });
 
-Deno.test("variar: sem IA = 409 sem_ia; com IA devolve só versões válidas, registra o uso e guarda o modelo novo", async () => {
+Deno.test("variar (mode ai): sem IA = 409 sem_ia; com IA devolve só versões válidas, registra o uso e guarda o modelo novo", async () => {
   const { db, st } = fakeDb();
   const caption = "Big Lobo 44144 com a Bahia! #Bahia";
-  await assert.rejects(varyCaptions(db, editor, { caption, count: 3 }), httpErr(409, "sem_ia"));
+  await assert.rejects(varyCaptions(db, editor, { caption, count: 3, mode: "ai" }), httpErr(409, "sem_ia"));
   await assert.rejects(varyCaptions(db, editor, { caption: "  ", count: 3 }), httpErr(400));
   await assert.rejects(varyCaptions(db, editor, { caption, count: 0 }), httpErr(400));
   await assert.rejects(varyCaptions(db, editor, { caption, count: 50 }), httpErr(400));
+  await assert.rejects(varyCaptions(db, editor, { caption, count: 2, mode: "gpt" }), httpErr(400));
   st.keys.set("t1", { team_id: "t1", provider: "gemini", api_key: KEY, model: "gemini-2.5-flash", updated_at: "x" });
-  const r = await varyCaptions(db, editor, { caption, count: 3 }, async (a) => {
+  const r = await varyCaptions(db, editor, { caption, count: 3, mode: "ai" }, async (a) => {
     assert.equal(a.preferred, "gemini-2.5-flash"); assert.equal(a.json, true); assert.ok(a.user.includes("Quantidade de versões: 3"));
     return { text: JSON.stringify({ variacoes: ["Com a Bahia, Big Lobo 44144! #Bahia", "Big Lobo 4414 com a Bahia! #Bahia", "Pela Bahia: Big Lobo 44144!"] }), model: "gemini-flash-latest" };
   });
@@ -97,11 +99,40 @@ Deno.test("variar: sem IA = 409 sem_ia; com IA devolve só versões válidas, re
   assert.equal(st.keys.get("t1")!.model, "gemini-flash-latest");
 });
 
-Deno.test("variar: cota esgotada vira 429 ia_cota e conta no uso; passou do limite diário = 429 limite_ia", async () => {
+Deno.test("variar (mode ai): cota esgotada vira 429 ia_cota e conta no uso; passou do limite diário = 429 limite_ia", async () => {
   const { db, st } = fakeDb();
   st.keys.set("t1", { team_id: "t1", provider: "groq", api_key: "gsk_x", model: null, updated_at: "x" });
-  await assert.rejects(varyCaptions(db, dono, { caption: "Oi", count: 2 }, async () => { throw new IaError("cota", 429, "rate limit"); }), httpErr(429, "ia_cota"));
+  await assert.rejects(varyCaptions(db, dono, { caption: "Oi", count: 2, mode: "ai" }, async () => { throw new IaError("cota", 429, "rate limit"); }), httpErr(429, "ia_cota"));
   assert.equal(st.calls.length, 1); assert.equal(st.calls[0].ok, false);
   for (let i = 0; i < AI_DAILY_LIMIT; i++) st.calls.push({ team_id: "t1", created_at: new Date().toISOString() });
-  await assert.rejects(varyCaptions(db, dono, { caption: "Oi", count: 2 }, async () => ({ text: "{}", model: "m" })), httpErr(429, "limite_ia"));
+  await assert.rejects(varyCaptions(db, dono, { caption: "Oi", count: 2, mode: "ai" }, async () => ({ text: "{}", model: "m" })), httpErr(429, "limite_ia"));
+});
+
+Deno.test("variar (auto, padrão da API): sem IA usa o gerador automático; com IA falhando avisa e completa", async () => {
+  const { db, st } = fakeDb();
+  const caption = "Continue firme, Big! Vamos juntos pela Bahia 💪 #Bahia #44144";
+  // o painel (login) sem mode continua pedindo só a IA
+  await assert.rejects(varyCaptions(db, dono, { caption, count: 2 }), httpErr(409, "sem_ia"));
+  const r = await varyCaptions(db, chave, { caption, count: 4 });
+  assert.equal(r.source, "local"); assert.equal(r.variations.length, 4); assert.equal(r.ai_count, 0); assert.equal(r.provider, null);
+  assert.equal(new Set(r.variations).size, 4, "sem repetidas");
+  for (const v of r.variations) { assert.notEqual(v, caption); assert.ok(v.includes("#Bahia") && v.includes("#44144")); }
+  const so = await varyCaptions(db, dono, { caption, count: 2, mode: "local" });
+  assert.equal(so.source, "local"); assert.equal(st.calls.length, 0, "gerador automático não conta como uso de IA");
+  st.keys.set("t1", { team_id: "t1", provider: "gemini", api_key: KEY, model: null, updated_at: "x" });
+  const falhou = await varyCaptions(db, chave, { caption, count: 3 }, async () => { throw new IaError("rede", 0, "sem conexão com o provedor"); });
+  assert.equal(falhou.source, "local"); assert.equal(falhou.variations.length, 3); assert.ok(String(falhou.warning).includes("gerador automático"));
+  const misto = await varyCaptions(db, chave, { caption, count: 3 }, async () => ({ text: JSON.stringify({ variacoes: ["Vamos juntos pela Bahia! Continue firme, Big 💪\n\n#44144 #Bahia"] }), model: "gemini-2.5-flash" }));
+  assert.equal(misto.source, "mixed"); assert.equal(misto.ai_count, 1); assert.equal(misto.local_count, 2); assert.equal(misto.variations.length, 3);
+});
+
+Deno.test("variar: a IA não pode devolver a mesma frase só trocando emoji ou pontuação", async () => {
+  const { db, st } = fakeDb();
+  st.keys.set("t1", { team_id: "t1", provider: "gemini", api_key: KEY, model: null, updated_at: "x" });
+  const caption = "Mais um Baratino de Jero!!1 🙌";
+  const r = await varyCaptions(db, dono, { caption, count: 3, mode: "ai" }, async () => ({
+    text: JSON.stringify({ variacoes: ["Mais um Baratino de Jero!! 🙌", "Mais um Baratino de Jero!!1 👏", "Chegou mais um Baratino de Jero! 🙌", "Mais um Baratino de Jero!!1 🙌"] }),
+    model: "gemini-2.5-flash",
+  }));
+  assert.deepEqual(r.variations, ["Chegou mais um Baratino de Jero! 🙌"]);
 });

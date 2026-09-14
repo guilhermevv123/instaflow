@@ -51,6 +51,36 @@
       <div id="usage" class="stack"></div>
       <p class="help">Cada conta que recebe uma publicação conta 1. O Instagram limita cada conta a 100 posts via API por 24 h.</p>
     </section>
+    <section class="card api-card" id="api-card">
+      <div class="split"><h2>API e integrações</h2><a class="btn ghost small" href="../api/" target="_blank" rel="noopener">Documentação da API →</a></div>
+      <p class="help">Com uma chave de acesso, outro sistema (n8n, Make, Zapier, seu site ou app) faz tudo o que o painel faz: listar e conectar contas, subir fotos e vídeos, agendar com legenda e variações por conta, acompanhar o resultado e receber avisos. Cada chave vale só para este time.</p>
+      <div class="api-base"><span class="label">Endereço da API</span><code class="mono" id="api-base"></code><button type="button" class="btn ghost small" id="api-copy-base">Copiar</button></div>
+      <div class="split"><h3>Chaves de acesso</h3><span class="help" id="api-keys-help"></span></div>
+      <div class="list" id="api-keys"><div class="sk-list" aria-busy="true"><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:45%"></span><span class="sk sk-line thin" style="width:65%"></span></span><span class="sk sk-pill"></span></div></div></div>
+      <form id="api-key-form" class="stack" novalidate hidden>
+        <div class="inline">
+          <input id="api-key-name" class="input" type="text" placeholder="Nome da chave (ex.: n8n, site, Zapier)" maxlength="60" style="flex:1 1 220px;min-width:0" autocomplete="off">
+          <select id="api-key-scope" class="input" style="width:auto" aria-label="Permissão"><option value="write">Leitura e escrita</option><option value="read">Só leitura</option></select>
+          <button class="btn" type="submit" id="api-key-create">Gerar chave</button>
+        </div>
+        <details class="api-more"><summary class="small">Mais opções: limitar a algumas contas e chamadas por minuto</summary>
+          <div class="field"><span class="label">Contas que a chave pode usar (nenhuma marcada = todas)</span><div class="acct-pick" id="api-key-accts"></div></div>
+          <div class="field"><label for="api-key-rate">Chamadas por minuto</label><input id="api-key-rate" class="input" type="number" min="10" max="600" step="10" value="120" style="width:130px"></div>
+        </details>
+      </form>
+      <div id="api-new-key" hidden></div>
+      <div class="split"><h3>Webhooks (avisos para o seu sistema)</h3><span class="help" id="api-hooks-help"></span></div>
+      <p class="help">O InstaFlow chama a sua URL quando um post sai numa conta, falha, ou termina em todas. Cada aviso vem assinado com o segredo do webhook.</p>
+      <div class="list" id="api-hooks"></div>
+      <form id="api-hook-form" class="inline" novalidate hidden>
+        <input id="api-hook-url" type="url" class="input" placeholder="https://seu-sistema.com/webhooks/instaflow" style="flex:1 1 260px;min-width:0" autocomplete="off">
+        <select id="api-hook-events" class="input" style="width:auto" aria-label="Eventos">
+          <option value="*">Todos os eventos</option><option value="post.published">post.published</option><option value="post.failed">post.failed</option><option value="post.completed">post.completed</option><option value="account.updated">account.updated</option>
+        </select>
+        <button class="btn ghost" type="submit" id="api-hook-create">Adicionar webhook</button>
+      </form>
+      <div id="api-new-hook" hidden></div>
+    </section>
     <section class="card">
       <h2>Como funciona</h2>
       <ul class="small muted" style="margin:0;padding-left:18px;display:grid;gap:4px">
@@ -65,7 +95,7 @@
   </div>
 </main>
 <script type="module">
-  import { supa, requireAuth, api, renderNav, fmt, esc, toast, cfg, team, teams, confirmDialog, promptDialog, pageReady } from "../assets/app.js";
+  import { supa, requireAuth, api, renderNav, fmt, esc, toast, cfg, team, teams, confirmDialog, promptDialog, pageReady, avatar, platformName } from "../assets/app.js";
   renderNav("config", "../");
   const session = await requireAuth("../");
   const $ = (s) => document.querySelector(s);
@@ -180,7 +210,129 @@
     finally { btn.disabled = false; btn.textContent = "Salvar e testar"; }
   });
 
-  await Promise.all([loadTeam(), loadUsage(), loadIa()]);
+  // ------------------------------------------------------------- API: chaves e webhooks
+  const API_BASE = `${cfg.SUPABASE_URL}/functions/v1/api/v1`;
+  $("#api-base").textContent = API_BASE;
+  async function copiar(txt, msg = "Copiado.") {
+    try { await navigator.clipboard.writeText(txt); toast(msg, "ok"); }
+    catch { await promptDialog("Copie o texto abaixo:", txt, { okLabel: "Fechar" }); }
+  }
+  $("#api-copy-base").addEventListener("click", () => copiar(API_BASE, "Endereço da API copiado."));
+  $("#api-key-form").hidden = !isAdmin;
+  $("#api-hook-form").hidden = !isAdmin;
+  $("#api-keys-help").textContent = isAdmin ? "" : "Só o dono ou um admin do time gera e revoga chaves.";
+  $("#api-hooks-help").textContent = isAdmin ? "" : "Só o dono ou um admin do time cadastra webhooks.";
+  const nomeConta = (a) => `${a.label ? `${a.label} · ` : ""}${a.platform === "facebook" ? a.username || a.id : `@${a.username || a.id}`}`;
+  let contasDoTime = [];
+
+  function mostrarSegredo(sel, titulo, segredo, ajuda, exemplo) {
+    const box = $(sel);
+    box.hidden = false;
+    box.innerHTML = `<div class="ok-box api-secret">
+      <b>${esc(titulo)}</b>
+      <p class="small">${esc(ajuda)}</p>
+      <div class="api-secret-row"><code class="mono">${esc(segredo)}</code><button type="button" class="btn small" data-copy="${esc(segredo)}">Copiar</button></div>
+      ${exemplo ? `<p class="small">Teste agora no terminal:</p><pre class="api-pre"><code>${esc(exemplo)}</code></pre><div class="inline"><button type="button" class="btn ghost small" data-copy="${esc(exemplo)}">Copiar comando</button><a class="small" href="../api/#comece" target="_blank" rel="noopener">Próximos passos na documentação →</a></div>` : ""}
+      <div><button type="button" class="btn ghost small" data-fechar="${sel.slice(1)}">Já guardei, fechar</button></div>
+    </div>`;
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  $("#api-card").addEventListener("click", (e) => {
+    const c = e.target.closest("[data-copy]"); if (c) { copiar(c.dataset.copy); return; }
+    const f = e.target.closest("[data-fechar]"); if (f) { const box = document.getElementById(f.dataset.fechar); box.hidden = true; box.innerHTML = ""; }
+  });
+
+  function pintarChaves(keys) {
+    $("#api-keys").innerHTML = keys.length ? keys.map((k) => {
+      const contas = k.account_ids ? k.account_ids.map((id) => contasDoTime.find((a) => a.id === id)).filter(Boolean).map(nomeConta) : null;
+      return `<div class="row api-row${k.revoked_at ? " revogada" : ""}">
+        <span><div class="title">${esc(k.name)} <code class="mono small">${esc(k.prefix)}…</code></div>
+          <div class="sub api-meta"><span>${k.read_only ? "Só leitura" : "Leitura e escrita"}</span><span title="${esc((contas || []).join(", "))}">${contas ? `${contas.length} conta${contas.length === 1 ? "" : "s"}` : "Todas as contas"}</span><span>${k.rate_limit} chamadas/min</span><span>criada em ${fmt.date(k.created_at)}</span><span>último uso: ${k.last_used_at ? esc(fmt.relative(k.last_used_at)) : "nunca"}</span><span>${Number(k.requests_24h || 0).toLocaleString("pt-BR")} chamadas em 24 h</span></div></span>
+        ${k.revoked_at ? `<span class="pill neutral" title="Revogada em ${fmt.dateTime(k.revoked_at)}">Revogada</span>` : isAdmin ? `<button type="button" class="btn danger small" data-revoke="${k.id}" data-name="${esc(k.name)}">Revogar</button>` : `<span class="pill ok">Ativa</span>`}
+      </div>`;
+    }).join("") : `<div class="empty small">Nenhuma chave ainda.${isAdmin ? " Dê um nome e clique em Gerar chave." : ""}</div>`;
+  }
+  async function carregarChaves() {
+    try { pintarChaves((await api("/keys")).data || []); }
+    catch (e) { $("#api-keys").innerHTML = e.status === 404 ? `<p class="help">A API ainda não está disponível neste servidor.</p>` : `<div class="error-box">${esc(e.message)}</div>`; }
+  }
+  async function carregarContasDaChave() {
+    const { data } = await supa.from("accounts").select("id, username, label, platform, profile_photo_url").eq("team_id", team.id).eq("archived", false).order("username");
+    contasDoTime = data || [];
+    $("#api-key-accts").innerHTML = contasDoTime.length
+      ? contasDoTime.map((a) => `<label><input type="checkbox" value="${esc(a.id)}">${avatar(a, 24)}<span class="name">${esc(nomeConta(a))}</span><span class="muted small">${esc(platformName(a.platform))}</span></label>`).join("")
+      : `<div class="empty small">Nenhuma conta conectada neste time.</div>`;
+  }
+  $("#api-key-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("#api-key-name").value.trim();
+    if (!name) { $("#api-key-name").focus(); toast("Dê um nome à chave para saber onde ela é usada.", "info"); return; }
+    const account_ids = [...$("#api-key-accts").querySelectorAll("input:checked")].map((i) => i.value);
+    const btn = $("#api-key-create"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Gerando…`;
+    try {
+      const k = await api("/keys", { method: "POST", body: { name, read_only: $("#api-key-scope").value === "read", account_ids: account_ids.length ? account_ids : null, rate_limit: Number($("#api-key-rate").value) || 120 } });
+      $("#api-key-name").value = "";
+      $("#api-key-accts").querySelectorAll("input:checked").forEach((i) => { i.checked = false; });
+      mostrarSegredo("#api-new-key", `Chave "${k.name}" criada`, k.key, "Copie e guarde agora (num gerenciador de senhas ou nas variáveis do seu sistema): por segurança, ela não aparece de novo. Se perder, revogue e gere outra.", `curl ${API_BASE}/me -H "Authorization: Bearer ${k.key}"`);
+      carregarChaves();
+    } catch (err) { toast(err.message, "error"); }
+    finally { btn.disabled = false; btn.textContent = "Gerar chave"; }
+  });
+  $("#api-keys").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-revoke]"); if (!b) return;
+    if (!(await confirmDialog(`Revogar a chave "${b.dataset.name}"? Tudo que usa essa chave para de funcionar na hora. Não dá para desfazer.`, { okLabel: "Revogar", danger: true }))) return;
+    try { await api(`/keys/${b.dataset.revoke}`, { method: "DELETE" }); toast("Chave revogada.", "ok"); carregarChaves(); }
+    catch (err) { toast(err.message, "error"); }
+  });
+
+  function pintarWebhooks(hooks) {
+    $("#api-hooks").innerHTML = hooks.length ? hooks.map((h) => {
+      const estado = !h.active ? `<span class="pill neutral">Pausado</span>` : h.failures ? `<span class="pill bad">${h.failures} falha${h.failures === 1 ? "" : "s"}</span>` : `<span class="pill ok">Ativo</span>`;
+      return `<div class="row api-row api-hook">
+        <span><div class="title mono small">${esc(h.url)}</div>
+          <div class="sub api-meta"><span>${h.events.map((ev) => esc(ev === "*" ? "todos os eventos" : ev)).join(", ")}</span><span>último aviso: ${h.last_at ? `${esc(fmt.relative(h.last_at))} (${h.last_status ? `HTTP ${h.last_status}` : "sem resposta"})` : "nenhum ainda"}</span></div>
+          ${h.last_error ? `<div class="sub" style="color:var(--bad)">${esc(h.last_error)}</div>` : ""}</span>
+        <span class="inline">${estado}${isAdmin ? `<button type="button" class="btn ghost small" data-hook-test="${h.id}">Testar</button><button type="button" class="btn ghost small" data-hook-toggle="${h.id}" data-active="${h.active}">${h.active ? "Pausar" : "Ativar"}</button><button type="button" class="btn danger small" data-hook-del="${h.id}">Apagar</button>` : ""}</span>
+      </div>`;
+    }).join("") : `<div class="empty small">Nenhum webhook cadastrado.</div>`;
+  }
+  async function carregarWebhooks() {
+    try { pintarWebhooks((await api("/webhooks")).data || []); }
+    catch (e) { $("#api-hooks").innerHTML = e.status === 404 ? "" : `<div class="error-box">${esc(e.message)}</div>`; }
+  }
+  $("#api-hook-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const url = $("#api-hook-url").value.trim();
+    if (!/^https:\/\//.test(url)) { $("#api-hook-url").focus(); toast("A URL do webhook precisa começar com https://", "info"); return; }
+    const ev = $("#api-hook-events").value;
+    const btn = $("#api-hook-create"); btn.disabled = true;
+    try {
+      const h = await api("/webhooks", { method: "POST", body: { url, events: ev === "*" ? ["*"] : [ev] } });
+      $("#api-hook-url").value = "";
+      mostrarSegredo("#api-new-hook", "Webhook adicionado", h.secret, "Este é o segredo do webhook: use para conferir a assinatura (cabeçalho X-InstaFlow-Signature) de cada aviso. Ele não aparece de novo aqui.", null);
+      carregarWebhooks();
+    } catch (err) { toast(err.message, "error"); }
+    finally { btn.disabled = false; }
+  });
+  $("#api-hooks").addEventListener("click", async (e) => {
+    const t = e.target.closest("[data-hook-test]"), g = e.target.closest("[data-hook-toggle]"), d = e.target.closest("[data-hook-del]");
+    try {
+      if (t) {
+        t.disabled = true; t.innerHTML = `<span class="spinner"></span>`;
+        const r = await api(`/webhooks/${t.dataset.hookTest}/test`, { method: "POST", body: {} });
+        toast(r.ok ? `Aviso de teste entregue (HTTP ${r.status}, ${r.ms} ms).` : `Sua URL não aceitou o aviso: ${r.error}.`, r.ok ? "ok" : "error", 7000);
+      } else if (g) {
+        await api(`/webhooks/${g.dataset.hookToggle}`, { method: "PUT", body: { active: g.dataset.active !== "true" } });
+      } else if (d) {
+        if (!(await confirmDialog("Apagar este webhook? Seu sistema para de receber os avisos.", { okLabel: "Apagar", danger: true }))) return;
+        await api(`/webhooks/${d.dataset.hookDel}`, { method: "DELETE" });
+        toast("Webhook apagado.", "ok");
+      } else return;
+      carregarWebhooks();
+    } catch (err) { toast(err.message, "error"); carregarWebhooks(); }
+  });
+
+  await Promise.all([loadTeam(), loadUsage(), loadIa(), carregarContasDaChave().then(carregarChaves), carregarWebhooks()]);
   pageReady();
 </script>
 </body>

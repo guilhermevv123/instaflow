@@ -25,12 +25,25 @@
 //   POST   /captions/vary             N variações da legenda com a IA do time
 //   POST   /metrics/sync              atualiza agora seguidores e métricas dos posts do time
 //   POST   /metrics/cron              o mesmo para todos os times (pg_cron, com segredo; sem login)
+//
+// API pública (mesmas rotas, com `Authorization: Bearer ifk_…`; `/v1` opcional no caminho):
+//   GET    /me                        quem está chamando (chave, time, limites)
+//   GET    /accounts, /accounts/:id   contas do time (com uso das 24 h e seguidores)
+//   GET/POST /groups, GET/PUT/DELETE /groups/:id
+//   GET/POST /media, GET/DELETE /media/:id   biblioteca (POST registra um arquivo já hospedado)
+//   GET    /posts, /posts/:id         publicações com o resultado em cada conta
+//   GET    /metrics/accounts, /metrics/posts, /metrics/posts/:platform_post_id
+//   GET/POST /keys, DELETE /keys/:id, GET /keys/:id/requests   (só pelo painel, dono/admin)
+//   GET/POST /webhooks, PUT/DELETE /webhooks/:id, POST /webhooks/:id/test, GET /webhooks/:id/deliveries
+// Cada chamada com chave devolve X-RateLimit-* e fica registrada em api_requests.
 
-import { friendlyError } from "../_shared/friendly.ts";
-import { aiRemove, aiSave, aiStatus, varyCaptions } from "../_shared/ia-rotas.ts";
+import * as pub from "../_shared/api-publica.ts";
+import { aiRemove, aiSave, aiStatus, generateVariations, varyCaptions, VARY_MODES, type VaryMode } from "../_shared/ia-rotas.ts";
 import { metricsCron, syncTeamManual } from "../_shared/metricas.ts";
 import { listData, pfm, PfmError, pfmListAll, type PfmAccount, type PfmPost, type PfmResult, type PfmWebhook } from "../_shared/pfm.ts";
-import { background, type Caller, corsHeaders, HttpError, json, readJson, requireMember, serviceClient, SUPABASE_URL, teamOf, teamTag } from "../_shared/util.ts";
+import { applyResult } from "../_shared/resultados.ts";
+import { accountAllowed, background, type Caller, canWrite, corsHeaders, HttpError, isAdmin, json, readJson, requireMember, serviceClient, sha256Hex, SUPABASE_URL, teamOf, teamTag } from "../_shared/util.ts";
+import { emit } from "../_shared/webhooks-time.ts";
 
 // Redes que o painel sabe publicar (ids do Post for Me).
 export const SUPPORTED = ["instagram", "facebook", "tiktok"] as const;
@@ -49,6 +62,7 @@ interface MediaInput {
   url: string;
   kind: "image" | "video";
   thumbnail_url?: string | null;
+  thumbnail_timestamp_ms?: number | null; // capa do vídeo: o quadro deste instante
   skip_processing?: boolean | null; // já ajustada no painel: o Post for Me não mexe
 }
 
@@ -74,10 +88,62 @@ interface PostInput {
   placement?: "timeline" | "reels" | "stories"; // vale para Instagram e Facebook
   media: MediaInput[];
   account_ids: string[];
+  group_ids?: string[];                        // API: contas dos grupos entram em account_ids
   scheduled_at?: string | null;
   caption_overrides?: Record<string, string>;
+  vary_captions?: boolean | VaryMode;          // API: gera uma legenda diferente para cada conta
+  dry_run?: boolean;                           // API: só confere e mostra o que seria enviado
   options?: { share_to_feed?: boolean; collaborators?: string[] }; // legado (Instagram)
   platform_options?: PlatformOptions;
+  _variations?: Record<string, unknown> | null; // interno: resumo das variações geradas
+}
+
+// Deixa a entrada da API no formato do painel: contas dos grupos, mídia só com
+// o link (tipo pelo nome do arquivo), horário sem fuso = horário da Bahia.
+async function normalizeInput(db: Db, caller: Caller, input: PostInput): Promise<PostInput> {
+  if (!input || typeof input !== "object") throw new HttpError(400, "Corpo da requisição precisa ser um objeto JSON.");
+  const ids = Array.isArray(input.account_ids) ? input.account_ids.map(String) : [];
+  const fromGroups = Array.isArray(input.group_ids) && input.group_ids.length ? await pub.accountsOfGroups(db, caller, input.group_ids) : [];
+  input.account_ids = [...new Set([...ids, ...fromGroups])];
+  const rawMedia = Array.isArray(input.media) ? input.media : [];
+  input.media = await Promise.all(rawMedia.map(async (m) => {
+    const url = typeof m === "string" ? m : String((m as MediaInput)?.url ?? "");
+    const obj = typeof m === "string" ? ({} as MediaInput) : (m as MediaInput);
+    const ts = obj.thumbnail_timestamp_ms;
+    return {
+      url,
+      kind: await pub.detectKind(url, obj.kind),
+      thumbnail_url: obj.thumbnail_url ?? null,
+      thumbnail_timestamp_ms: ts === null || ts === undefined || String(ts) === "" ? null : Number(ts),
+      skip_processing: obj.skip_processing ?? null,
+    };
+  }));
+  if (typeof input.scheduled_at === "string") {
+    const s = input.scheduled_at.trim();
+    if (!s || s === "now") input.scheduled_at = null;
+    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(s)) input.scheduled_at = `${s}-03:00`;
+  }
+  input.caption = String(input.caption ?? "");
+  if (input.caption_overrides !== undefined && input.caption_overrides !== null) {
+    const o = input.caption_overrides;
+    if (typeof o !== "object" || Array.isArray(o) || Object.values(o).some((v) => typeof v !== "string")) throw new HttpError(400, "caption_overrides precisa ser um objeto { \"id_da_conta\": \"legenda\" }.");
+    const extra = Object.keys(o).filter((id) => !input.account_ids.includes(id));
+    if (extra.length) throw new HttpError(400, `caption_overrides tem conta que não está em account_ids: ${extra.join(", ")}.`);
+  }
+  const vary = input.vary_captions;
+  if (vary !== undefined && vary !== false && vary !== true && !(VARY_MODES as readonly unknown[]).includes(vary)) throw new HttpError(400, 'vary_captions precisa ser true, false, "auto", "ai" ou "local".');
+  if (vary && input.account_ids.length > 1 && input.caption.trim()) {
+    const overrides: Record<string, string> = { ...(input.caption_overrides ?? {}) };
+    // a primeira conta fica com a legenda original; as outras sem legenda própria ganham uma versão
+    const need = input.account_ids.slice(1).filter((id) => !overrides[id]?.trim());
+    if (need.length) {
+      const r = await generateVariations(db, caller, input.caption.trim(), need.length, vary === true ? "auto" : vary);
+      need.forEach((id, i) => { if (r.variations[i]) overrides[id] = r.variations[i]; });
+      input._variations = { source: r.source, generated: r.variations.length, ai_count: r.ai_count, local_count: r.local_count, weak: r.weak, provider: r.provider_label, warning: r.warning };
+    }
+    input.caption_overrides = overrides;
+  }
+  return input;
 }
 
 // Aceita o formato antigo (options = Instagram) e o novo (por rede).
@@ -104,49 +170,168 @@ function normalizeOptions(input: PostInput): PlatformOptions {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(req) });
   const url = new URL(req.url);
-  const path = url.pathname.replace(/^\/functions\/v1/, "").replace(/^\/api/, "").replace(/\/+$/, "") || "/";
+  // /functions/v1/api/v1/posts e /functions/v1/api/posts são a mesma coisa
+  const path = url.pathname.replace(/^\/functions\/v1/, "").replace(/^\/api/, "").replace(/^\/v1(?=\/|$)/, "").replace(/\/+$/, "") || "/";
   const seg = path.split("/").filter(Boolean);
   const db = serviceClient();
+  const started = Date.now();
+  const requestId = crypto.randomUUID();
+  let caller: Caller | null = null;
+  let res: Response;
 
   try {
     // O agendador (pg_cron) chama sem usuário: confere o segredo guardado em app_settings.
     if (req.method === "POST" && path === "/metrics/cron") return json(req, await metricsCron(db, req));
-    const caller = await requireMember(req);
-
-    if (req.method === "GET" && path === "/health") return json(req, await health(db, caller));
-    if (req.method === "GET" && path === "/team") return json(req, await teamInfo(db, caller));
-    if (req.method === "GET" && path === "/accounts/sync") return json(req, await syncAccounts(db, caller));
-    if (req.method === "POST" && path === "/accounts/connect") return json(req, await connectUrl(db, caller, await readJson<{ platform?: string; reconnect?: boolean }>(req).catch(() => ({}))));
-    if (req.method === "POST" && seg[0] === "accounts" && seg[2] === "disconnect") return json(req, await disconnectAccount(db, caller, seg[1]));
-    if (req.method === "DELETE" && seg[0] === "accounts" && seg.length === 2) return json(req, await removeAccount(db, caller, seg[1]));
-    if (req.method === "POST" && path === "/media/upload-url") return json(req, await pfm("/media/create-upload-url", { method: "POST" }));
-    if (req.method === "POST" && path === "/posts") return json(req, await createPost(db, caller, await readJson<PostInput>(req)), 201);
-    if (req.method === "PUT" && seg[0] === "posts" && seg.length === 2) return json(req, await updatePost(db, caller, seg[1], await readJson<PostInput>(req)));
-    if (req.method === "DELETE" && seg[0] === "posts" && seg.length === 2) return json(req, await cancelPost(db, caller, seg[1]));
-    if (req.method === "POST" && seg[0] === "posts" && seg[2] === "sync") return json(req, await syncPost(db, caller, seg[1]));
-    if (req.method === "POST" && seg[0] === "posts" && seg[2] === "retry") return json(req, await retryPost(db, caller, seg[1]), 201);
-    if (req.method === "POST" && seg[0] === "posts" && seg[2] === "reschedule") return json(req, await reschedulePost(db, caller, seg[1], await readJson<{ scheduled_at?: string }>(req)));
-    if (req.method === "POST" && path === "/sync") return json(req, await syncPending(db, caller));
-    if (req.method === "GET" && path === "/usage") return json(req, await usage(db, caller));
-    if (req.method === "POST" && path === "/webhooks/setup") return json(req, await ensureWebhook(db, true));
-
-    if (req.method === "GET" && path === "/ai") return json(req, await aiStatus(db, caller));
-    if (req.method === "PUT" && path === "/ai") return json(req, await aiSave(db, caller, await readJson<{ key?: string }>(req)));
-    if (req.method === "DELETE" && path === "/ai") return json(req, await aiRemove(db, caller));
-    if (req.method === "POST" && path === "/metrics/sync") return json(req, await syncTeamManual(db, caller.teamId));
-    if (req.method === "POST" && path === "/captions/vary") return json(req, await varyCaptions(db, caller, await readJson<{ caption?: string; count?: number }>(req)));
-
-    throw new HttpError(404, `Rota não encontrada: ${req.method} ${path}`);
+    const who = await requireMember(req);
+    caller = who;
+    // chave só de leitura: apenas GET
+    if (req.method !== "GET" && who.via === "key" && !canWrite(who)) pub.requireWrite(who);
+    const idem = req.method === "POST" ? (req.headers.get("idempotency-key") ?? "").trim() : "";
+    res = idem
+      ? await withIdempotency(db, who, req, path, idem, (r) => route(r, db, who, path, seg, url.searchParams))
+      : await route(req, db, who, path, seg, url.searchParams);
   } catch (e) {
-    if (e instanceof HttpError) return json(req, { error: e.message, ...(e.code ? { code: e.code } : {}) }, e.status);
-    if (e instanceof PfmError) {
-      console.error("Post for Me:", e.status, e.message, JSON.stringify(e.body).slice(0, 500));
-      return json(req, { error: `Post for Me: ${e.message}`, details: e.body }, e.status >= 500 ? 502 : e.status);
-    }
-    console.error(e);
-    return json(req, { error: (e as Error).message ?? "Erro interno" }, 500);
+    res = errorResponse(req, e);
+    const he = e instanceof HttpError ? e : null;
+    if (!caller && he?.apiKey && he.teamId) caller = { id: null, email: "", teamId: he.teamId, teamName: "", role: "api", maxAccounts: 0, maxPostsMonth: 0, via: "key", apiKey: he.apiKey };
   }
+  res.headers.set("X-Request-Id", requestId);
+  if (caller?.apiKey) {
+    const k = caller.apiKey;
+    res.headers.set("X-RateLimit-Limit", String(k.rateLimit));
+    res.headers.set("X-RateLimit-Remaining", String(Math.max(0, k.rateLimit - k.count)));
+    res.headers.set("X-RateLimit-Reset", String(Math.ceil(new Date(k.reset).getTime() / 1000)));
+    const ip = (req.headers.get("cf-connecting-ip") || req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
+    background(Promise.resolve(db.from("api_requests").insert({ key_id: k.id, team_id: caller.teamId, method: req.method, path: path.slice(0, 200), status: res.status, ms: Date.now() - started, ip })).then(({ error }) => { if (error) console.error("api_requests:", error.message); }));
+  }
+  return res;
 });
+
+// Idempotency-Key: o mesmo POST repetido com a mesma chave (dentro de 24 h, no
+// mesmo time) devolve a resposta guardada em vez de fazer tudo de novo.
+// Corpo diferente = 409 idempotencia_conflito; primeira ainda rodando = 409
+// idempotencia_em_andamento. 5xx, 409 e 429 não ficam guardados (dá para tentar de novo).
+async function withIdempotency(db: Db, caller: Caller, req: Request, path: string, key: string, run: (r: Request) => Promise<Response>): Promise<Response> {
+  if (key.length > 255 || !/^[\x21-\x7e]+$/.test(key)) throw new HttpError(400, "Idempotency-Key inválida: use até 255 caracteres visíveis, sem espaço (um UUID novo por operação é o ideal).", "idempotencia_invalida");
+  const raw = await req.text();
+  const hash = await sha256Hex(`${req.method} ${path}\n${raw}`);
+  const where = () => db.from("api_idempotency").delete().eq("team_id", caller.teamId).eq("key", key);
+  const { data: old, error: selErr } = await db.from("api_idempotency").select("request_hash, status, response, created_at").eq("team_id", caller.teamId).eq("key", key).maybeSingle();
+  if (selErr) throw new HttpError(500, selErr.message);
+  if (old) {
+    const age = Date.now() - new Date(old.created_at as string).getTime();
+    const abandoned = old.status === null && age > 5 * 60_000; // a função tem no máximo 150 s
+    if (age > 24 * 3600_000 || abandoned) {
+      await where();
+    } else {
+      if (old.request_hash !== hash) throw new HttpError(409, "Esta Idempotency-Key já foi usada com outra requisição. Gere uma chave nova para cada operação.", "idempotencia_conflito");
+      if (old.status === null) throw new HttpError(409, "Uma requisição com esta Idempotency-Key ainda está em andamento. Espere alguns segundos e tente de novo com a mesma chave.", "idempotencia_em_andamento");
+      const replay = json(req, old.response, old.status as number);
+      replay.headers.set("Idempotent-Replayed", "true");
+      return replay;
+    }
+  }
+  const { error: insErr } = await db.from("api_idempotency").insert({ team_id: caller.teamId, key, method: req.method, path: path.slice(0, 200), request_hash: hash });
+  if (insErr) {
+    if (insErr.code === "23505") throw new HttpError(409, "Uma requisição com esta Idempotency-Key ainda está em andamento. Espere alguns segundos e tente de novo com a mesma chave.", "idempotencia_em_andamento");
+    throw new HttpError(500, insErr.message);
+  }
+  let res: Response;
+  try {
+    res = await run(new Request(req.url, { method: req.method, headers: req.headers, body: raw }));
+  } catch (e) {
+    res = errorResponse(req, e);
+  }
+  if (res.status >= 500 || res.status === 409 || res.status === 429) {
+    await where();
+  } else {
+    const body = await res.clone().json().catch(() => null);
+    const { error: upErr } = await db.from("api_idempotency").update({ status: res.status, response: body }).eq("team_id", caller.teamId).eq("key", key);
+    if (upErr) console.error("api_idempotency:", upErr.message);
+  }
+  return res;
+}
+
+function errorResponse(req: Request, e: unknown): Response {
+  if (e instanceof HttpError) return json(req, { error: e.message, ...(e.code ? { code: e.code } : {}) }, e.status);
+  if (e instanceof PfmError) {
+    console.error("Post for Me:", e.status, e.message, JSON.stringify(e.body).slice(0, 500));
+    return json(req, { error: `Post for Me: ${e.message}`, details: e.body }, e.status >= 500 ? 502 : e.status);
+  }
+  console.error(e);
+  return json(req, { error: (e as Error).message ?? "Erro interno" }, 500);
+}
+
+async function route(req: Request, db: Db, caller: Caller, path: string, seg: string[], q: URLSearchParams): Promise<Response> {
+  const m = req.method;
+  const is = (method: string, ...pattern: (string | null)[]) => m === method && seg.length === pattern.length && pattern.every((p, i) => p === null || seg[i] === p);
+
+  if (is("GET", "health")) return json(req, await health(db, caller));
+  if (is("GET", "me")) return json(req, await pub.me(db, caller));
+  if (is("GET", "team")) return json(req, await teamInfo(db, caller));
+  // contas
+  if (is("GET", "accounts")) return json(req, await pub.listAccounts(db, caller, q));
+  if (is("GET", "accounts", "sync")) return json(req, await syncAccounts(db, caller));
+  if (is("POST", "accounts", "sync")) return json(req, await syncAccounts(db, caller));
+  if (is("POST", "accounts", "connect")) return json(req, await connectUrl(db, caller, await readJson<{ platform?: string; reconnect?: boolean }>(req).catch(() => ({}))));
+  if (is("GET", "accounts", null)) return json(req, await pub.getAccount(db, caller, seg[1]));
+  if (is("POST", "accounts", null, "disconnect")) return json(req, await disconnectAccount(db, caller, seg[1]));
+  if (is("DELETE", "accounts", null)) return json(req, await removeAccount(db, caller, seg[1]));
+  // grupos
+  if (is("GET", "groups")) return json(req, await pub.listGroups(db, caller));
+  if (is("POST", "groups")) return json(req, await pub.createGroup(db, caller, await readJson(req)), 201);
+  if (is("GET", "groups", null)) return json(req, await pub.getGroup(db, caller, seg[1]));
+  if (is("PUT", "groups", null) || is("PATCH", "groups", null)) return json(req, await pub.updateGroup(db, caller, seg[1], await readJson(req)));
+  if (is("DELETE", "groups", null)) return json(req, await pub.deleteGroup(db, caller, seg[1]));
+  // biblioteca
+  if (is("POST", "media", "upload-url")) { pub.requireWrite(caller); return json(req, await pfm("/media/create-upload-url", { method: "POST" })); }
+  if (is("GET", "media")) return json(req, await pub.listMedia(db, caller, q));
+  if (is("POST", "media")) return json(req, await pub.registerMedia(db, caller, await readJson(req)), 201);
+  if (is("GET", "media", null)) return json(req, await pub.getMedia(db, caller, seg[1]));
+  if (is("DELETE", "media", null)) return json(req, await pub.deleteMedia(db, caller, seg[1]));
+  // publicações
+  if (is("GET", "posts")) return json(req, await pub.listPosts(db, caller, q));
+  if (is("POST", "posts")) {
+    const input = await normalizeInput(db, caller, await readJson<PostInput>(req));
+    if (q.get("dry_run") === "true") input.dry_run = true;
+    const out = await createPost(db, caller, input);
+    return json(req, out, "dry_run" in out ? 200 : 201);
+  }
+  if (is("GET", "posts", null)) return json(req, await pub.getPostFull(db, caller, seg[1]));
+  if (is("PUT", "posts", null) || is("PATCH", "posts", null)) return json(req, await updatePost(db, caller, seg[1], await normalizeInput(db, caller, await readJson<PostInput>(req))));
+  if (is("DELETE", "posts", null)) return json(req, await cancelPost(db, caller, seg[1]));
+  if (is("POST", "posts", null, "sync")) return json(req, await syncPost(db, caller, seg[1]));
+  if (is("POST", "posts", null, "retry")) return json(req, await retryPost(db, caller, seg[1]), 201);
+  if (is("POST", "posts", null, "reschedule")) return json(req, await reschedulePost(db, caller, seg[1], await readJson<{ scheduled_at?: string }>(req)));
+  if (is("POST", "sync")) return json(req, await syncPending(db, caller));
+  if (is("GET", "usage")) return json(req, await usage(db, caller));
+  // webhook do Post for Me (global) — só dono/admin no painel
+  if (is("POST", "webhooks", "setup")) { if (caller.via !== "jwt") throw new HttpError(403, "O webhook do Post for Me é registrado só pelo painel.", "so_painel"); return json(req, await ensureWebhook(db, true)); }
+  // webhooks do time (API pública)
+  if (is("GET", "webhooks")) return json(req, await pub.listWebhooks(db, caller));
+  if (is("POST", "webhooks")) return json(req, await pub.createWebhook(db, caller, await readJson(req)), 201);
+  if (is("PUT", "webhooks", null) || is("PATCH", "webhooks", null)) return json(req, await pub.updateWebhook(db, caller, seg[1], await readJson(req)));
+  if (is("DELETE", "webhooks", null)) return json(req, await pub.deleteWebhook(db, caller, seg[1]));
+  if (is("POST", "webhooks", null, "test")) return json(req, await pub.testWebhook(db, caller, seg[1]));
+  if (is("GET", "webhooks", null, "deliveries")) return json(req, await pub.webhookDeliveries(db, caller, seg[1], q));
+  // chaves de API (só painel)
+  if (is("GET", "keys")) return json(req, await pub.listKeys(db, caller));
+  if (is("POST", "keys")) return json(req, await pub.createKey(db, caller, await readJson(req)), 201);
+  if (is("DELETE", "keys", null)) return json(req, await pub.revokeKey(db, caller, seg[1]));
+  if (is("GET", "keys", null, "requests")) return json(req, await pub.keyRequests(db, caller, seg[1], q));
+  // IA e legendas
+  if (is("GET", "ai")) return json(req, await aiStatus(db, caller));
+  if (is("PUT", "ai")) return json(req, await aiSave(db, caller, await readJson<{ key?: string }>(req)));
+  if (is("DELETE", "ai")) return json(req, await aiRemove(db, caller));
+  if (is("POST", "captions", "vary")) return json(req, await varyCaptions(db, caller, await readJson<{ caption?: string; count?: number }>(req)));
+  // desempenho
+  if (is("GET", "metrics", "accounts")) return json(req, await pub.metricsAccounts(db, caller));
+  if (is("GET", "metrics", "posts")) return json(req, await pub.metricsPosts(db, caller, q));
+  if (is("GET", "metrics", "posts", null)) return json(req, await pub.metricsPost(db, caller, seg[2]));
+  if (is("POST", "metrics", "sync")) return json(req, await syncTeamManual(db, caller.teamId));
+
+  throw new HttpError(404, `Rota não encontrada: ${m} ${path}. Veja a documentação em /api/.`, "rota_desconhecida");
+}
 
 // ---------------------------------------------------------------------------
 // Saúde, time e contas
@@ -223,10 +408,11 @@ async function syncAccounts(db: Db, caller: Caller) {
   await q;
   background(ensureWebhook(db, false).catch((e) => console.error("webhook", e)));
   const { data } = await db.from("accounts").select("*").eq("team_id", caller.teamId).order("username");
-  return { accounts: data ?? [], synced: rows.length };
+  return { accounts: (data ?? []).filter((a) => accountAllowed(caller, a.id as string)), synced: rows.length };
 }
 
 async function connectUrl(db: Db, caller: Caller, body: { platform?: string; reconnect?: boolean }) {
+  if (caller.apiKey?.accountIds) throw new HttpError(403, "Esta chave está presa a algumas contas e não pode conectar contas novas.", "conta_bloqueada");
   const platform = (body.platform ?? "instagram") as Platform;
   if (!(SUPPORTED as readonly string[]).includes(platform)) throw new HttpError(400, "Rede não suportada. Use instagram, facebook ou tiktok.");
   if (!body.reconnect) {
@@ -257,33 +443,33 @@ async function connectUrl(db: Db, caller: Caller, body: { platform?: string; rec
 }
 
 async function accountOf(db: Db, caller: Caller, id: string) {
-  const { data, error } = await db.from("accounts").select("id, team_id").eq("id", id).eq("team_id", caller.teamId).maybeSingle();
+  const { data, error } = await db.from("accounts").select("id, team_id, platform, username").eq("id", id).eq("team_id", caller.teamId).maybeSingle();
   if (error) throw new HttpError(500, error.message);
-  if (!data) throw new HttpError(404, "Esta conta não está no seu time.");
+  if (!data || !accountAllowed(caller, id)) throw new HttpError(404, "Esta conta não está no seu time.");
   return data;
 }
 
 async function disconnectAccount(db: Db, caller: Caller, id: string) {
-  await accountOf(db, caller, id);
+  const acc = await accountOf(db, caller, id);
   await pfm(`/social-accounts/${encodeURIComponent(id)}/disconnect`, { method: "POST" });
   await db.from("accounts").update({ status: "disconnected" }).eq("id", id);
+  background(emit(db, caller.teamId, "account.updated", { account_id: id, platform: acc.platform, username: acc.username, status: "disconnected" }).catch((e) => console.error("webhooks", e)));
   return { ok: true };
 }
 
 async function removeAccount(db: Db, caller: Caller, id: string) {
-  await accountOf(db, caller, id);
+  const acc = await accountOf(db, caller, id);
   const { count } = await db.from("post_targets").select("post_id", { count: "exact", head: true }).eq("account_id", id);
   try {
     await pfm(`/social-accounts/${encodeURIComponent(id)}`, { method: "DELETE" });
   } catch (e) {
     if (!(e instanceof PfmError && e.status === 404)) throw e;
   }
-  if ((count ?? 0) > 0) {
-    await db.from("accounts").update({ status: "disconnected", archived: true }).eq("id", id);
-    return { ok: true, archived: true };
-  }
-  await db.from("accounts").delete().eq("id", id);
-  return { ok: true, archived: false };
+  const archived = (count ?? 0) > 0;
+  if (archived) await db.from("accounts").update({ status: "disconnected", archived: true }).eq("id", id);
+  else await db.from("accounts").delete().eq("id", id);
+  background(emit(db, caller.teamId, "account.updated", { account_id: id, platform: acc.platform, username: acc.username, status: "disconnected", removed: true, archived }).catch((e) => console.error("webhooks", e)));
+  return { ok: true, archived };
 }
 
 // ---------------------------------------------------------------------------
@@ -296,10 +482,14 @@ function validatePost(input: PostInput, platforms: Set<string>) {
   const placement = input.placement ?? "timeline";
   if (!["timeline", "reels", "stories"].includes(placement)) errors.push("Tipo de post inválido.");
   const media = Array.isArray(input.media) ? input.media : [];
-  for (const m of media) {
-    if (!m?.url || !/^https:\/\//.test(m.url)) errors.push("Mídia com link inválido.");
-    if (!["image", "video"].includes(m?.kind)) errors.push("Tipo de mídia inválido.");
-  }
+  media.forEach((m, i) => {
+    const n = media.length > 1 ? `Mídia ${i + 1}: ` : "Mídia: ";
+    if (!m?.url || !/^https:\/\//.test(m.url)) errors.push(`${n}link inválido (precisa ser um link público começando com https://).`);
+    if (!["image", "video"].includes(m?.kind)) errors.push(`${n}tipo inválido (use "image" ou "video").`);
+    if (m?.thumbnail_url && !/^https:\/\//.test(m.thumbnail_url)) errors.push(`${n}a capa (thumbnail_url) precisa ser um link https.`);
+    if (m?.thumbnail_timestamp_ms !== null && m?.thumbnail_timestamp_ms !== undefined && !(Number.isFinite(m.thumbnail_timestamp_ms) && m.thumbnail_timestamp_ms >= 0)) errors.push(`${n}thumbnail_timestamp_ms precisa ser um número de milissegundos (0 ou mais).`);
+    if (m?.kind === "image" && (m.thumbnail_url || (m.thumbnail_timestamp_ms !== null && m.thumbnail_timestamp_ms !== undefined))) errors.push(`${n}capa (thumbnail_url/thumbnail_timestamp_ms) só vale para vídeo.`);
+  });
   const videos = media.filter((m) => m.kind === "video").length;
   const images = media.length - videos;
   const caption = input.caption?.trim() ?? "";
@@ -336,12 +526,14 @@ function validatePost(input: PostInput, platforms: Set<string>) {
 
 async function loadAccounts(db: Db, caller: Caller, ids: string[]) {
   const unique = [...new Set(ids)];
-  if (!unique.length) throw new HttpError(400, "Escolha pelo menos uma conta.");
+  if (!unique.length) throw new HttpError(400, "Escolha pelo menos uma conta (account_ids ou group_ids).");
+  const blocked = unique.filter((id) => !accountAllowed(caller, id));
+  if (blocked.length) throw new HttpError(403, `Esta chave não tem acesso à conta ${blocked.join(", ")}.`, "conta_bloqueada");
   const { data, error } = await db.from("accounts").select("id, username, status, archived, platform").eq("team_id", caller.teamId).in("id", unique);
   if (error) throw new HttpError(500, error.message);
   const found = new Map((data ?? []).map((a) => [a.id, a]));
   const missing = unique.filter((id) => !found.has(id));
-  if (missing.length) throw new HttpError(400, "Uma das contas escolhidas não está no seu time. Sincronize as contas.");
+  if (missing.length) throw new HttpError(400, `Conta não encontrada neste time: ${missing.join(", ")}. Veja GET /accounts ou sincronize as contas.`, "conta_desconhecida");
   const off = (data ?? []).filter((a) => a.status !== "connected" || a.archived).map((a) => "@" + (a.username ?? a.id));
   if (off.length) throw new HttpError(400, `Estas contas precisam ser reconectadas antes: ${off.join(", ")}.`);
   return data ?? [];
@@ -397,6 +589,7 @@ function buildPfmBody(input: PostInput, placement: string, externalId: string, p
     media: input.media.map((m) => ({
       url: m.url,
       thumbnail_url: m.thumbnail_url || undefined,
+      thumbnail_timestamp_ms: m.thumbnail_timestamp_ms ?? undefined,
       skip_processing: m.skip_processing ? true : undefined,
     })),
     platform_configurations,
@@ -406,7 +599,7 @@ function buildPfmBody(input: PostInput, placement: string, externalId: string, p
 }
 
 function cleanMedia(media: MediaInput[]): MediaInput[] {
-  return media.map((m) => ({ url: m.url, kind: m.kind, thumbnail_url: m.thumbnail_url ?? null, skip_processing: m.skip_processing ? true : null }));
+  return media.map((m) => ({ url: m.url, kind: m.kind, thumbnail_url: m.thumbnail_url ?? null, ...(m.thumbnail_timestamp_ms !== null && m.thumbnail_timestamp_ms !== undefined ? { thumbnail_timestamp_ms: m.thumbnail_timestamp_ms } : {}), skip_processing: m.skip_processing ? true : null }));
 }
 
 async function createPost(db: Db, caller: Caller, input: PostInput) {
@@ -416,6 +609,14 @@ async function createPost(db: Db, caller: Caller, input: PostInput) {
   const placement = validatePost(input, platforms);
   await checkMonthLimit(db, caller, input.account_ids.length);
   const scheduled = input.scheduled_at ? new Date(input.scheduled_at).toISOString() : null;
+  // teste sem publicar: passou por todas as regras; mostra o que iria para o Post for Me
+  if (input.dry_run) {
+    return {
+      dry_run: true as const, valid: true, placement, scheduled_at: scheduled, account_ids: input.account_ids, platforms: [...platforms],
+      caption: input.caption?.trim() ?? "", caption_overrides: input.caption_overrides ?? {}, variations: input._variations ?? null,
+      request: buildPfmBody({ ...input, scheduled_at: scheduled }, placement, "dry_run", platforms),
+    };
+  }
 
   const { data: post, error } = await db.from("posts").insert({
     team_id: caller.teamId,
@@ -441,13 +642,22 @@ async function createPost(db: Db, caller: Caller, input: PostInput) {
 
   await db.from("posts").update({ pfm_post_id: pfmPost.id, status: pfmPost.status }).eq("id", post.id);
   await db.from("post_targets").insert(input.account_ids.map((account_id) => ({ post_id: post.id, account_id, status: "pending" })));
-  return { id: post.id, pfm_post_id: pfmPost.id, status: pfmPost.status, scheduled_at: scheduled };
+  return {
+    id: post.id, pfm_post_id: pfmPost.id, status: pfmPost.status, scheduled_at: scheduled, placement,
+    account_ids: input.account_ids, caption: post.caption, caption_overrides: input.caption_overrides ?? {}, variations: input._variations ?? null,
+  };
 }
 
 async function getPost(db: Db, caller: Caller, id: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new HttpError(404, "Publicação não encontrada.");
   const { data, error } = await db.from("posts").select("*").eq("id", id).eq("team_id", caller.teamId).maybeSingle();
   if (error) throw new HttpError(500, error.message);
   if (!data) throw new HttpError(404, "Publicação não encontrada neste time.");
+  // chave presa a algumas contas: só mexe em publicações que vão apenas para elas
+  if (caller.apiKey?.accountIds) {
+    const { data: targets } = await db.from("post_targets").select("account_id").eq("post_id", id);
+    if (!(targets ?? []).length || (targets ?? []).some((t) => !accountAllowed(caller, t.account_id as string))) throw new HttpError(404, "Publicação não encontrada nas contas desta chave.");
+  }
   return data;
 }
 
@@ -522,7 +732,7 @@ async function syncPost(db: Db, caller: Caller, id: string) {
   if (!post.pfm_post_id) return { status: post.status, results: 0 };
   const remote = await pfm<PfmPost>(`/social-posts/${encodeURIComponent(post.pfm_post_id)}`);
   const results = await pfmListAll<PfmResult>("/social-post-results", { post_id: post.pfm_post_id });
-  for (const r of results) await applyResult(db, r);
+  for (const r of results) await applyResult(db, r as PfmResult);
   const { data: targets } = await db.from("post_targets").select("status").eq("post_id", id);
   const pending = (targets ?? []).filter((t) => t.status === "pending").length;
   const status = remote.status === "processed" && pending > 0 && results.length === 0 ? "processed" : remote.status;
@@ -565,26 +775,6 @@ async function retryPost(db: Db, caller: Caller, id: string) {
     caption_overrides: post.caption_overrides,
     platform_options: post.options,
   });
-}
-
-// Aplica um resultado (de webhook ou de sync) na tabela post_targets.
-export async function applyResult(db: Db, r: PfmResult) {
-  const { data: post } = await db.from("posts").select("id").eq("pfm_post_id", r.post_id).maybeSingle();
-  if (!post) return false;
-  const row = {
-    post_id: post.id,
-    account_id: r.social_account_id,
-    status: r.success ? "published" : "failed",
-    result_id: r.id,
-    permalink: r.platform_data?.url ?? null,
-    platform_post_id: r.platform_data?.id ?? null,
-    error: r.success ? null : friendlyError(r.error),
-    details: r.success ? null : { error: r.error, details: r.details },
-    published_at: r.success ? new Date().toISOString() : null,
-  };
-  const { error } = await db.from("post_targets").upsert(row, { onConflict: "post_id,account_id" });
-  if (error) console.error("post_targets upsert", error.message);
-  return true;
 }
 
 // ---------------------------------------------------------------------------

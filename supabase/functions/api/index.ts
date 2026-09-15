@@ -469,6 +469,11 @@ async function connectUrl(db: Db, caller: Caller, body: { platform?: string; rec
   let platformData: Record<string, unknown> = { [platform]: {} };
   if (platform === "instagram") platformData = { instagram: { connection_type: "instagram" } };
   if (platform === "linkedin") platformData = { linkedin: { connection_type: "organization" } };
+  // TikTok: o número de seguidores precisa de user.info.stats, que o Post for Me não pede sozinho
+  // (a lista substitui a padrão, então vão também as permissões de sempre)
+  if (platform === "tiktok" && (body as { seguidores?: unknown }).seguidores === true) {
+    platformData = { tiktok: { permission_overrides: ["user.info.basic", "user.info.stats", "video.list", "video.upload", "video.publish"] } };
+  }
   if (platform === "bluesky") {
     const bs = (body as { bluesky?: { handle?: unknown; app_password?: unknown } }).bluesky;
     const handle = String(bs?.handle ?? "").trim().replace(/^@/, "");

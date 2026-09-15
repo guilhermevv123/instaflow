@@ -137,7 +137,7 @@ export function paintTop(el, data, accounts) {
     const [label, kind] = accountHealth(full);
     const name = a.label ? `${esc(a.label)} <span class="muted">${esc(handle(a))}</span>` : esc(handle(a));
     const side = kind !== "ok" ? `<span class="pill ${kind}">${esc(label)}</span>` : a.platform === "instagram" ? `24 h: ${a.last24}/100` : "publicadas";
-    return `<a class="top-row" href="contas/">${avatar(full, 34)}<span style="min-width:0"><div class="top-name">${name}</div><div class="top-bar"><i style="width:${Math.round((a.published / max) * 100)}%"></i></div></span><span class="top-num">${nf.format(a.published)}<small>${side}</small></span></a>`;
+    return `<a class="top-row" href="desempenho/?conta=${encodeURIComponent(a.id)}" title="Ver o desempenho desta conta">${avatar(full, 34)}<span style="min-width:0"><div class="top-name">${name}</div><div class="top-bar"><i style="width:${Math.round((a.published / max) * 100)}%"></i></div></span><span class="top-num">${nf.format(a.published)}<small>${side}</small></span></a>`;
   }).join("");
 }
 

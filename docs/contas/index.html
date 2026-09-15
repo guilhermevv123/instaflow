@@ -186,12 +186,13 @@
 
   // accountId: reconectar ou liberar métricas de uma conta que já está aqui. A
   // autorização precisa levar a identificação dela, senão o serviço recusa.
-  async function startConnect(platform = "instagram", reconnect = false, accountId = null) {
+  // extra: pedidos a mais na autorização (ex.: { seguidores: true } no TikTok)
+  async function startConnect(platform = "instagram", reconnect = false, accountId = null, extra = {}) {
     let bluesky = null;
     if (platform === "bluesky") { bluesky = await pedirBluesky(accountId); if (!bluesky) return; }
     const b = $("#connect"); b.disabled = true;
     try {
-      const { url } = await api("/accounts/connect", { method: "POST", body: { platform, reconnect, ...(accountId ? { account_id: accountId } : {}), ...(bluesky ? { bluesky } : {}) } });
+      const { url } = await api("/accounts/connect", { method: "POST", body: { platform, reconnect, ...(accountId ? { account_id: accountId } : {}), ...(bluesky ? { bluesky } : {}), ...extra } });
       const w = window.open(url, "instaflow_connect", "popup=yes,width=620,height=780");
       if (!w) { location.href = url; return; }
       popup = w;
@@ -261,8 +262,8 @@
         </span>
         <span class="acct-side">
           <span class="pill ${kind}">${esc(label)}</span>
-          ${a.status === "connected" && a.insights_ok === false && a.platform !== "bluesky" ? `<button class="btn ghost small accent" data-liberar="${a.id}" title="Reconectar pedindo também as métricas (visualizações, alcance, compartilhamentos e salvos)">Liberar métricas</button>` : a.insights_ok ? `<span class="pill ok" title="Visualizações, alcance, compartilhamentos e salvos de cada post">métricas completas</span>` : ""}
-          <span class="inline"><button class="btn ghost small" data-label="${a.id}" title="Apelido" aria-label="Editar apelido">✎</button>${a.status !== "connected" ? `<button class="btn small" data-reconnect="${a.id}">Reconectar</button>` : `<button class="btn ghost small" data-disconnect="${a.id}">Desconectar</button>`}<button class="btn danger small" data-remove="${a.id}">Remover</button></span>
+          ${a.status === "connected" && a.insights_ok === false && a.platform !== "bluesky" ? `<button class="btn ghost small accent" data-liberar="${a.id}" title="Reconectar pedindo também as métricas (visualizações, alcance, compartilhamentos e salvos)">Liberar métricas</button>` : a.insights_ok ? `<span class="pill ok" title="Visualizações, alcance, compartilhamentos e salvos de cada post">métricas completas</span>` : ""}${a.status === "connected" && a.platform === "tiktok" && a.followers == null ? `<button class="btn ghost small accent" data-seguidores="${a.id}" title="Reconectar pedindo também o número de seguidores">Liberar seguidores</button>` : ""}
+          <span class="inline"><a class="btn ghost small" href="../desempenho/?conta=${encodeURIComponent(a.id)}" title="Todos os posts e o desempenho desta conta">Desempenho</a><button class="btn ghost small" data-label="${a.id}" title="Apelido" aria-label="Editar apelido">✎</button>${a.status !== "connected" ? `<button class="btn small" data-reconnect="${a.id}">Reconectar</button>` : `<button class="btn ghost small" data-disconnect="${a.id}">Desconectar</button>`}<button class="btn danger small" data-remove="${a.id}">Remover</button></span>
         </span>
       </div>`;
     }).join("") : accounts.length ? `<div class="empty">Nenhuma conta com “${esc(busca.value.trim())}”. Apague a busca (Esc) para ver todas.</div>` : `<div class="empty">Nenhuma conta ainda. Clique em <b>+ Conectar</b> e escolha a rede.</div>`;
@@ -277,6 +278,10 @@
         const v = await promptDialog(`Apelido para ${handle(a)} (deixe vazio para remover)`, a.label || "", { placeholder: "Ex.: Loja Centro", maxlength: 40 });
         if (v === null) return;
         const { error } = await supa.from("accounts").update({ label: v.trim() || null }).eq("id", a.id); if (error) throw error;
+      } else if (t.dataset.seguidores) {
+        const a = accounts.find((x) => x.id === t.dataset.seguidores);
+        if (!(await confirmDialog(`Liberar os seguidores de ${handle(a)}? Vai abrir a autorização do TikTok de novo, agora pedindo também o número de seguidores. Antes de continuar, entre no tiktok.com com ${handle(a)} neste navegador (a autorização usa a conta que estiver aberta). A conta continua a mesma e nada agendado se perde.`, { okLabel: "Abrir autorização" }))) return;
+        await startConnect("tiktok", true, a?.id, { seguidores: true }); return;
       } else if (t.dataset.liberar) {
         const a = accounts.find((x) => x.id === t.dataset.liberar);
         const rede = a?.platform || "instagram";

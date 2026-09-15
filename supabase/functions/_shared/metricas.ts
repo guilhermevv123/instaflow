@@ -15,6 +15,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { listData, pfm as pfmReal } from "./pfm.ts";
 import { HttpError, timingSafeEqual } from "./util.ts";
+import { perfilDaRede } from "./seguidores.ts";
 
 type Db = SupabaseClient;
 type Query = Record<string, string | string[] | undefined>;
@@ -189,6 +190,9 @@ export async function syncTeam(db: Db, teamId: string, deps: MetricasDeps = deps
         perfil = { followers: num(d.followers_count), follows: num(d.follows_count), media_count: num(d.media_count) };
       } else if (token && conta.platform === "facebook") {
         try { const d = await getJson(deps, `${FB}/me?fields=followers_count,fan_count`, token); perfil.followers = primeiro(d.followers_count, d.fan_count); } catch { /* página sem essa permissão */ }
+      } else {
+        // YouTube, TikTok, Threads, Bluesky: direto na rede, quando a conexão permite (sem travar os posts)
+        try { perfil = await perfilDaRede(deps.fetch, conta.platform, token, conta.username); } catch { /* a rede não liberou esse número */ }
       }
       // 2) posts: feed do Post for Me (+ curtidas/comentários pela Graph quando o feed não traz métricas)
       const itens = await feedDaConta(deps, conta.id);

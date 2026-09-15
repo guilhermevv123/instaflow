@@ -26,6 +26,7 @@
     </div>
   </div>
   <div id="avisos" class="stack"></div>
+  <section class="chart-card conta-topo" id="conta-topo" hidden></section>
 
   <div class="dash-sec">Visão geral · posts publicados no período</div>
   <div class="kpis" id="kpis">
@@ -76,20 +77,42 @@
   <p class="help">Os números se atualizam sozinhos a cada 3 horas. Seguidores ganhos saem da diferença entre um dia e outro, a partir da primeira atualização. Visualizações, alcance, compartilhamentos, salvos e tempo assistido só aparecem nas contas com métricas liberadas (Contas → Liberar métricas).</p>
 </main>
 <script type="module">
-  import { supa, requireAuth, api, renderNav, fmt, esc, toast, pageReady, team, handle } from "../assets/app.js";
+  import { supa, requireAuth, api, renderNav, fmt, esc, toast, pageReady, team, handle, avatar, platformName } from "../assets/app.js";
   import { paintIcons } from "../assets/dash.js";
   import { carregar, paintKpis, paintAvisos, paintSeguidores, paintNovas, paintTabela, paintTop, paintTodos } from "../assets/desempenho.js";
   renderNav("desempenho", "../");
   paintIcons(document);
   await requireAuth("../");
   const $ = (s) => document.querySelector(s);
+  // ?conta=spc_… → desempenho só dessa conta (clique na tabela Por conta, no Início ou em Contas)
+  const contaAlvo = new URLSearchParams(location.search).get("conta") || "";
+  const numero = (n) => (n == null ? "—" : new Intl.NumberFormat("pt-BR").format(n));
 
-  let dias = 30, d = null, ord = { k: "seguidores", dir: -1 }, abaSeg = "total", abaNov = "inter", conta = "", limite = 30;
+  let dias = 30, d = null, ord = { k: "seguidores", dir: -1 }, abaSeg = "total", abaNov = "inter", conta = contaAlvo, limite = contaAlvo ? 60 : 30;
   try { const x = Number(localStorage.getItem("if.perf.days")); if ([1, 7, 30, 90].includes(x)) dias = x; } catch {}
   const marca = () => $("#period").querySelectorAll("[data-d]").forEach((b) => { const on = Number(b.dataset.d) === dias; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
   marca();
 
+  function pintarConta() {
+    const topo = $("#conta-topo");
+    topo.hidden = !contaAlvo;
+    if (!contaAlvo) return;
+    $("#tabela").closest("section").hidden = true;
+    $("#filtro-conta").hidden = true;
+    const a = d.contas[0];
+    if (!a) { topo.innerHTML = `<div class="ch-empty">Essa conta não está neste time (ou foi removida). <a href="./">Ver todas as contas</a></div>`; return; }
+    const l = d.linhas[0];
+    document.title = `${a.label || handle(a)} · Desempenho · InstaFlow`;
+    $("h1").textContent = a.label || handle(a);
+    const ganhos = l?.ganhos == null ? "—" : `${l.ganhos > 0 ? "+" : ""}${numero(l.ganhos)}`;
+    topo.innerHTML = `<div class="conta-topo-in">${avatar(a, 56)}
+      <span class="conta-nome"><b>${esc(a.label || handle(a))}</b><span class="muted small">${a.label ? `${esc(handle(a))} · ` : ""}${esc(platformName(a.platform))}</span></span>
+      <span class="conta-nums"><span><b>${numero(a.followers)}</b> seguidores</span><span><b class="${l?.ganhos > 0 ? "up" : l?.ganhos < 0 ? "down" : ""}">${ganhos}</b> ${dias === 1 ? "hoje" : "no período"}</span><span><b>${numero(l?.posts ?? 0)}</b> posts medidos no período</span></span>
+      <a class="btn ghost small" href="./">← Todas as contas</a></div>`;
+  }
+
   function pintar() {
+    pintarConta();
     paintKpis($("#kpis"), d);
     paintAvisos($("#avisos"), d);
     paintSeguidores($("#ch-seg"), $("#seg-sub"), d, abaSeg);
@@ -104,7 +127,7 @@
   }
   async function recarregar() {
     document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = ".55"));
-    try { d = await carregar(supa, team.id, dias); pintar(); }
+    try { d = await carregar(supa, team.id, dias, contaAlvo); pintar(); }
     catch (e) { toast(e.message, "error"); }
     finally { document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = "")); }
   }

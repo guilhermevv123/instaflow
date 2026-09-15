@@ -37,6 +37,18 @@
 img.sem, span.sem { background: repeating-linear-gradient(135deg, var(--surface-2) 0 10px, var(--surface) 10px 20px); }
 @media (prefers-reduced-motion: reduce) { .tp { transition: none; } .tp:hover { transform: none; } }
 
+/* página de desempenho de uma conta (?conta=) */
+.conta-topo { padding: 16px 18px; }
+.conta-topo-in { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; }
+.conta-topo-in .av-wrap { flex: none; }
+.conta-nome { display: grid; gap: 2px; min-width: 0; flex: 1 1 200px; }
+.conta-nome b { font: 700 1.12rem var(--display); overflow-wrap: anywhere; }
+.conta-nums { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: .9rem; }
+.conta-nums b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.conta-nums b.up { color: var(--ok); }
+.conta-nums b.down { color: var(--bad); }
+.tbl .cta-link:hover .nome, .tbl .cta-link:focus-visible .nome { color: var(--accent); text-decoration: underline; }
+
 /* Tabela larga rola dentro do próprio quadro: sem isso o conteúdo de 800+ px
    estica o cartão (min-width automático de grade) e a página rola para o lado no celular. */
 .chart-card, .chart-card > * { min-width: 0; }

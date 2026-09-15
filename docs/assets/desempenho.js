@@ -32,15 +32,17 @@ const ICO = {
 };
 const ic = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[k]}</svg>`;
 
-export async function carregar(supa, teamId, dias) {
+// `conta`: só os números dessa conta (página de desempenho da conta)
+export async function carregar(supa, teamId, dias, conta = "") {
   const hoje = hojeBahia();
   const inicio = somaDias(hoje, -(dias - 1));
   const antes = somaDias(inicio, -1);
+  const daConta = (q, coluna = "account_id") => (conta ? q.eq(coluna, conta) : q);
   const [c, s, p, d] = await Promise.all([
-    supa.from("accounts").select("id, username, label, platform, profile_photo_url, status, access_token_expires_at, followers, follows, media_count, insights_ok, stats_synced_at").eq("team_id", teamId).eq("archived", false),
-    supa.from("account_stats_daily").select("account_id, day, followers").eq("team_id", teamId).gte("day", antes).order("day"),
-    supa.from("post_metrics").select("platform_post_id, account_id, post_id, platform, product_type, media_type, permalink, caption, thumbnail_url, posted_at, views, reach, likes, comments, shares, saved, follows, total_interactions, avg_watch_ms, nivel, updated_at").eq("team_id", teamId).order("posted_at", { ascending: false }).limit(2000),
-    supa.from("post_metrics_daily").select("platform_post_id, day, views, likes, comments, shares, saved").eq("team_id", teamId).gte("day", antes).order("day"),
+    daConta(supa.from("accounts").select("id, username, label, platform, profile_photo_url, status, access_token_expires_at, followers, follows, media_count, insights_ok, stats_synced_at").eq("team_id", teamId).eq("archived", false), "id"),
+    daConta(supa.from("account_stats_daily").select("account_id, day, followers").eq("team_id", teamId).gte("day", antes).order("day")),
+    daConta(supa.from("post_metrics").select("platform_post_id, account_id, post_id, platform, product_type, media_type, permalink, caption, thumbnail_url, posted_at, views, reach, likes, comments, shares, saved, follows, total_interactions, avg_watch_ms, nivel, updated_at").eq("team_id", teamId).order("posted_at", { ascending: false }).limit(2000)),
+    daConta(supa.from("post_metrics_daily").select("platform_post_id, day, views, likes, comments, shares, saved").eq("team_id", teamId).gte("day", antes).order("day")),
   ]);
   for (const r of [c, s, p, d]) if (r.error) throw new Error(r.error.message);
   return montar({ hoje, inicio, dias, contas: c.data || [], snaps: s.data || [], posts: p.data || [], diario: d.data || [] });
@@ -116,7 +118,7 @@ export function paintKpis(el, d, { link = null } = {}) {
     ? `<div class="ln">Ganhos: <b>${d.desde ? `histórico desde ${esc(rotuloDia(d.desde))}` : "aparecem após a 1ª atualização"}</b></div>`
     : `<div class="ln">No período: <b class="${t.ganhos > 0 ? "up" : t.ganhos < 0 ? "down" : ""}">${sinal(t.ganhos)}</b></div>`;
   el.innerHTML = [
-    card(`<h3>Seguidores ${ic("seg")}</h3><div class="big">${compacto(t.seguidores)}</div>${ganhos}<div class="ln">${nf.format(d.contas.length)} contas somadas</div>`),
+    card(`<h3>Seguidores ${ic("seg")}</h3><div class="big">${compacto(t.seguidores)}</div>${ganhos}<div class="ln">${d.contas.length === 1 ? "Só esta conta" : `${nf.format(d.contas.length)} contas somadas`}</div>`),
     card(`<h3>Visualizações ${ic("olho")}</h3><div class="big">${compacto(t.views)}</div>
       <div class="ln">${t.views == null ? "Liberadas depois de reconectar as contas" : `Dos ${nf.format(t.posts)} posts do período`}</div>
       ${t.reach != null ? `<div class="ln">Alcance: <b>${compacto(t.reach)}</b></div>` : ""}`),
@@ -144,7 +146,7 @@ const rotulosEspacados = (n) => { const passo = Math.max(1, Math.ceil(n / 7)); r
 
 export function paintSeguidores(el, sub, d, aba) {
   if (!d.desde) { el.innerHTML = `<div class="ch-empty">O histórico de seguidores começa na primeira atualização. Os ganhos por dia aparecem a partir do dia seguinte.</div>`; sub.textContent = "Soma das contas, dia a dia"; return; }
-  sub.textContent = `Soma das ${d.contas.length} contas · histórico desde ${rotuloDia(d.desde)}`;
+  sub.textContent = `${d.contas.length === 1 ? "Só esta conta" : `Soma das ${d.contas.length} contas`} · histórico desde ${rotuloDia(d.desde)}`;
   if (aba === "ganhos") {
     if (!d.ganhosDia.some((v) => v != null)) { el.innerHTML = `<div class="ch-empty">Os ganhos aparecem quando houver dois dias de histórico (volte amanhã).</div>`; return; }
     barChart(el, { labels: d.lista, series: [{ name: "Seguidores ganhos", color: "--ok", values: d.ganhosDia.map((v) => v ?? 0) }], fmtLabel: rotulosEspacados(d.lista.length) });
@@ -181,13 +183,13 @@ export function paintTabela(el, d, ord = { k: "seguidores", dir: -1 }) {
     return `<td>${nf.format(n)}</td>`;
   };
   el.innerHTML = `<div class="tbl-wrap"><table class="tbl"><thead><tr><th scope="col" data-k="conta">Conta</th>${COLS.map(([k, t]) => `<th scope="col" data-k="${k}" ${ord.k === k ? `aria-sort="${ord.dir < 0 ? "descending" : "ascending"}"` : ""}>${t}${ord.k === k ? (ord.dir < 0 ? " ▾" : " ▴") : ""}</th>`).join("")}<th scope="col">Métricas</th></tr></thead><tbody>
-    ${rows.map((l) => `<tr><td><span class="cta">${avatar(l.a, 28)}<span class="nome" title="${esc(handle(l.a))}">${esc(l.a.label || handle(l.a))}</span><span class="muted small">${esc(platformName(l.a.platform))}</span></span></td>${COLS.map(([k]) => cel(l, k)).join("")}
+    ${rows.map((l) => `<tr><td><a class="cta cta-link" href="?conta=${encodeURIComponent(l.a.id)}" title="Ver todos os posts e o desempenho de ${esc(handle(l.a))}">${avatar(l.a, 28)}<span class="nome">${esc(l.a.label || handle(l.a))}</span><span class="muted small">${esc(platformName(l.a.platform))}</span></a></td>${COLS.map(([k]) => cel(l, k)).join("")}
       <td>${l.a.insights_ok ? `<span class="pill ok">completas</span>` : l.a.insights_ok === false ? `<a class="pill warn" href="../contas/" title="Reconecte para liberar visualizações, alcance, compartilhamentos e salvos">básicas · liberar</a>` : `<span class="pill neutral">sem posts</span>`}</td></tr>`).join("")}
   </tbody></table></div>`;
 }
 
 const thumb = (p, cls = "") => p.thumbnail_url
-  ? `<img class="${cls}" src="${esc(p.thumbnail_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.classList.add('sem');this.removeAttribute('src')">`
+  ? `<img class="${cls}" src="${esc(p.thumbnail_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:(this.className+' sem').trim()}))">`
   : `<span class="${cls} sem" aria-hidden="true"></span>`;
 
 export function paintTop(el, sub, d) {

@@ -33,6 +33,11 @@
   <div class="grid main-side">
     <section class="card">
       <div class="split"><h2 id="count">Contas</h2><span class="muted small">A barra mostra as publicações das últimas 24 h (o Instagram limita a 100)</span></div>
+      <label class="busca" id="busca-wrap" hidden>
+        <svg class="busca-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.2" y2="16.2"/></svg>
+        <input class="input" id="busca" type="search" placeholder="Buscar por @, apelido, rede ou grupo" aria-label="Buscar conta" autocomplete="off" spellcheck="false">
+        <kbd class="busca-kbd" aria-hidden="true">/</kbd>
+      </label>
       <div class="list" id="list"><div class="sk-list" aria-busy="true"><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:55%"></span><span class="sk sk-line thin" style="width:35%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:65%"></span><span class="sk sk-line thin" style="width:30%"></span></span><span class="sk sk-pill"></span></div><div class="sk-row"><span class="sk sk-av"></span><span class="sk-lines"><span class="sk sk-line" style="width:48%"></span><span class="sk sk-line thin" style="width:40%"></span></span><span class="sk sk-pill"></span></div></div></div>
     </section>
     <div class="stack" style="gap:16px">
@@ -158,8 +163,32 @@
     [accounts, groups] = await Promise.all([loadAccounts({ includeArchived: false }), loadGroups()]);
     const { data: u } = await supa.from("account_usage_24h").select("*");
     usage = new Map((u || []).map((x) => [x.account_id, x.published_24h]));
-    $("#count").textContent = `${accounts.length} conta${accounts.length === 1 ? "" : "s"}`;
-    $("#list").innerHTML = accounts.length ? accounts.map((a) => {
+    pintar();
+  }
+
+  // Lupa: filtra a lista já carregada por @, apelido, rede e grupo, sem acento e sem
+  // diferenciar maiúsculas; com várias palavras, a conta precisa ter todas.
+  function semAcento(s) { return String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); }
+  function textoDaConta(a) {
+    const gs = groups.filter((g) => g.account_ids.includes(a.id)).map((g) => g.name);
+    return semAcento([a.username, a.label, handle(a), platformName(a.platform), ...gs].join(" "));
+  }
+  $("#busca").addEventListener("input", () => pintar());
+  $("#busca").addEventListener("keydown", (e) => { if (e.key === "Escape" && e.target.value) { e.preventDefault(); e.stopPropagation(); e.target.value = ""; pintar(); } });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey || $("#busca-wrap").hidden || document.querySelector("dialog[open]") || e.target.closest?.("input, textarea, select, [contenteditable]")) return;
+    e.preventDefault(); $("#busca").focus();
+  });
+
+  function pintar() {
+    const busca = $("#busca");
+    $("#busca-wrap").hidden = accounts.length < 2;
+    if ($("#busca-wrap").hidden) busca.value = "";
+    const partes = semAcento(busca.value.trim().replace(/^@/, "")).split(/\s+/).filter(Boolean);
+    const lista = partes.length ? accounts.filter((a) => { const t = textoDaConta(a); return partes.every((p) => t.includes(p)); }) : accounts;
+    const total = `${accounts.length} conta${accounts.length === 1 ? "" : "s"}`;
+    $("#count").textContent = partes.length ? `${lista.length} de ${total}` : total;
+    $("#list").innerHTML = lista.length ? lista.map((a) => {
       const [label, kind] = accountHealth(a);
       const used = usage.get(a.id) || 0;
       const gs = groups.filter((g) => g.account_ids.includes(a.id)).map((g) => `<span class="chip" style="cursor:default">${esc(g.name)}</span>`).join(" ");
@@ -177,7 +206,7 @@
           <span class="inline"><button class="btn ghost small" data-label="${a.id}" title="Apelido" aria-label="Editar apelido">✎</button>${a.status !== "connected" ? `<button class="btn small" data-reconnect="${a.id}">Reconectar</button>` : `<button class="btn ghost small" data-disconnect="${a.id}">Desconectar</button>`}<button class="btn danger small" data-remove="${a.id}">Remover</button></span>
         </span>
       </div>`;
-    }).join("") : `<div class="empty">Nenhuma conta ainda. Clique em <b>+ Conectar</b> e escolha a rede.</div>`;
+    }).join("") : accounts.length ? `<div class="empty">Nenhuma conta com “${esc(busca.value.trim())}”. Apague a busca (Esc) para ver todas.</div>` : `<div class="empty">Nenhuma conta ainda. Clique em <b>+ Conectar</b> e escolha a rede.</div>`;
     $("#groups").innerHTML = groups.length ? groups.map((g) => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto"><span><div class="title">${esc(g.name)}</div><div class="sub">${g.account_ids.length} conta${g.account_ids.length === 1 ? "" : "s"}</div></span><button class="btn ghost small" data-edit-group="${g.id}">Editar</button></div>`).join("") : `<div class="empty small">Nenhum grupo.</div>`;
   }
 

@@ -413,6 +413,15 @@ dialog.modal::backdrop { background: rgba(8, 9, 12, .55); backdrop-filter: blur(
 .field.ov.repeat textarea { border-color: var(--warn); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 35%, transparent); }
 .linkbtn { background: none; border: 0; padding: 0; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 
+/* ---- lupa: busca dentro de uma lista (Contas) */
+.busca { position: relative; display: block; margin: 2px 0 12px; }
+.busca .input { width: 100%; padding-left: 40px; padding-right: 40px; }
+.busca .input::-webkit-search-cancel-button { cursor: pointer; }
+.busca-ico { position: absolute; left: 13px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.busca-kbd { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); min-width: 22px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); font: 600 .74rem/1.5 var(--mono); text-align: center; pointer-events: none; }
+.busca .input:focus ~ .busca-kbd, .busca .input:not(:placeholder-shown) ~ .busca-kbd { display: none; }
+@media (hover: none) { .busca-kbd { display: none; } }
+
 /* ---- API e integrações (Config) */
 .api-card { grid-column: 1 / -1; }
 .api-card h3 { margin-top: 6px; }

@@ -45,6 +45,7 @@ import { applyResult } from "../_shared/resultados.ts";
 import { accountAllowed, background, type Caller, canWrite, corsHeaders, HttpError, isAdmin, json, readJson, requireMember, serviceClient, sha256Hex, SUPABASE_URL, teamOf, teamTag } from "../_shared/util.ts";
 import { emit } from "../_shared/webhooks-time.ts";
 import { isSupported, type Platform, SUPPORTED } from "../_shared/redes.ts";
+import { lookupAccounts } from "../_shared/contas-lookup.ts";
 
 // Redes que o painel sabe publicar (ids do Post for Me): lista única em _shared/redes.ts.
 export { SUPPORTED };
@@ -300,6 +301,7 @@ async function route(req: Request, db: Db, caller: Caller, path: string, seg: st
   if (is("GET", "accounts", "sync")) return json(req, await syncAccounts(db, caller));
   if (is("POST", "accounts", "sync")) return json(req, await syncAccounts(db, caller));
   if (is("POST", "accounts", "connect")) return json(req, await connectUrl(db, caller, await readJson<{ platform?: string; reconnect?: boolean }>(req).catch(() => ({}))));
+  if (is("POST", "accounts", "lookup")) return json(req, await lookupAccounts(db, caller, await readJson<{ ids?: unknown }>(req).catch(() => ({}))));
   if (is("GET", "accounts", null)) return json(req, await pub.getAccount(db, caller, seg[1]));
   if (is("POST", "accounts", null, "disconnect")) return json(req, await disconnectAccount(db, caller, seg[1]));
   if (is("DELETE", "accounts", null)) return json(req, await removeAccount(db, caller, seg[1]));

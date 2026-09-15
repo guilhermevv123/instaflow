@@ -103,21 +103,40 @@
   // Volta da autorização (o Post for Me manda estes parâmetros). O erro mais comum
   // é a conta aberta no navegador já estar conectada: o serviço devolve
   // "External Id already exists for account spc_…", que aqui vira uma explicação.
-  function explicarErro(err) {
+  const idsRecusados = (err) => String(err || "").split("|").map((p) => /External Id already exists for account (\S+)/i.exec(p)?.[1]).filter(Boolean);
+  // `deFora`: rede e nome das contas recusadas que não estão neste time (o servidor nunca diz de que time são)
+  function explicarErro(err, deFora = null) {
     const partes = String(err || "").split("|").map((s) => s.trim()).filter(Boolean);
-    const ids = partes.map((p) => /External Id already exists for account (\S+)/i.exec(p)?.[1]).filter(Boolean);
+    const ids = idsRecusados(err);
     if (ids.length) {
+      const msgs = [];
       const doTime = ids.map((id) => accounts.find((x) => x.id === id)).filter(Boolean);
-      if (!doTime.length) return "Essa conta já está conectada no InstaFlow, mas não aparece neste time. A autorização usa a conta que está aberta no navegador: entre com a conta certa e tente de novo.";
-      const uma = doTime.length === 1;
-      return `${doTime.map((a) => `<b>${esc(handle(a))}</b>`).join(", ")} já ${uma ? "está conectada" : "estão conectadas"} aqui. A autorização usa a conta que está aberta no navegador: para conectar <b>outra</b> conta, entre com ela no ${esc(platformName(doTime[0].platform))} neste navegador (ou saia desta) e clique em + Conectar de novo. Para atualizar ${uma ? "essa conta" : "essas contas"}, use <b>Liberar métricas</b> ou <b>Reconectar</b> na linha ${uma ? "dela" : "de cada uma"}.`;
+      if (doTime.length) {
+        const uma = doTime.length === 1;
+        msgs.push(`${doTime.map((a) => `<b>${esc(handle(a))}</b>`).join(", ")} já ${uma ? "está conectada" : "estão conectadas"} aqui. A autorização usa a conta que está aberta no navegador: para conectar <b>outra</b> conta, entre com ela no ${esc(platformName(doTime[0].platform))} neste navegador (ou saia desta) e clique em + Conectar de novo. Para atualizar ${uma ? "essa conta" : "essas contas"}, use <b>Liberar métricas</b> ou <b>Reconectar</b> na linha ${uma ? "dela" : "de cada uma"}.`);
+      }
+      const fora = ids.filter((id) => !doTime.some((a) => a.id === id));
+      if (fora.length) {
+        const nomes = (deFora || []).filter((c) => c.username && c.platform);
+        const qtd = nomes.length || fora.length, uma = qtd === 1;
+        const quem = nomes.length ? nomes.map((c) => `<b>${esc(handle(c))}</b> (${esc(PLATFORMS[c.platform]?.short || platformName(c.platform))})`).join(", ") : (uma ? "Essa conta" : "Essas contas");
+        msgs.push(`${quem} ${uma ? "já está conectada" : "já estão conectadas"} em <b>outro time</b> do InstaFlow, e cada conta só pode ficar em um time. Para usar aqui, entre no InstaFlow com o login daquele time, remova ${uma ? "a conta" : "as contas"} em Contas e conecte de novo neste time. Se a ideia era conectar outra conta, entre no site da rede com ela antes.`);
+      }
+      return msgs.join(" ");
     }
     return esc(partes.filter((p) => !/^No valid accounts found$/i.test(p)).join(" · ")) || "Confira se a conta é Profissional e tente de novo.";
   }
-  function mostrarRetorno(ok, n, err) {
-    $("#notice").innerHTML = ok
-      ? `<div class="ok-box">${n > 1 ? "Contas conectadas" : "Conta conectada"} com sucesso${n ? ` (${n})` : ""}. Já dá para agendar.</div>`
-      : `<div class="error-box">Não foi possível conectar. ${explicarErro(err)}</div>`;
+  async function mostrarRetorno(ok, n, err) {
+    const pintarAviso = (deFora) => {
+      $("#notice").innerHTML = ok
+        ? `<div class="ok-box">${n > 1 ? "Contas conectadas" : "Conta conectada"} com sucesso${n ? ` (${n})` : ""}. Já dá para agendar.</div>`
+        : `<div class="error-box">Não foi possível conectar. ${explicarErro(err, deFora)}</div>`;
+    };
+    pintarAviso(null);
+    const fora = ok ? [] : idsRecusados(err).filter((id) => !accounts.some((x) => x.id === id));
+    if (!fora.length) return;
+    try { const r = await api("/accounts/lookup", { method: "POST", body: { ids: fora } }); pintarAviso((r.data || []).filter((c) => !c.here)); }
+    catch { /* fica a explicação sem o nome da conta */ }
   }
   const params = new URLSearchParams(location.search);
   if (params.has("isSuccess")) {

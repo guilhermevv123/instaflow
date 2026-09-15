@@ -500,6 +500,56 @@ curl -X POST "{BASE}/posts" \
           <li>Se o TikTok publicar como <b>privado</b>, confira <code>privacy_status</code>; perfis recém-conectados podem ter restrição do próprio TikTok.</li>
         </ul>
 
+        <h3>TikTok Business</h3>
+        <p>Mesmas regras de arquivo do TikTok acima: <b>um vídeo</b> ou de 1 a 32 fotos, sem misturar. As opções também são as mesmas (<code>platform_options.tiktok_business</code>; sem ele, vale <code>platform_options.tiktok</code>).</p>
+
+        <h3>YouTube</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Tipo</th><th>Arquivo</th><th>Regras</th></tr></thead>
+          <tbody>
+            <tr><td>Vídeo</td><td>MP4 com vídeo H.264 e áudio AAC é o mais seguro</td><td><b>Exatamente um vídeo</b> por publicação; fotos não entram. Canal sem verificação no YouTube só envia vídeos de até 15 minutos.</td></tr>
+            <tr><td>Shorts</td><td>Vídeo vertical</td><td>Vertical de até 3 minutos aparece como Shorts. Quem decide é o YouTube; não há opção separada.</td></tr>
+            <tr><td>Capa</td><td><code>thumbnail_url</code> (JPEG)</td><td>Só vale em canal verificado. Se a capa falhar, o vídeo sai do mesmo jeito, com a capa automática.</td></tr>
+          </tbody>
+        </table></div>
+        <ul>
+          <li>Título (<code>platform_options.youtube.title</code>): até 100 caracteres. Vazio usa a primeira linha da legenda, e a legenda inteira vira a descrição.</li>
+          <li><code>privacy_status</code>: <code>public</code>, <code>unlisted</code> (só com o link) ou <code>private</code>. <code>made_for_kids</code> declara conteúdo feito para crianças.</li>
+        </ul>
+
+        <h3>Threads</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Tipo</th><th>Regras</th></tr></thead>
+          <tbody>
+            <tr><td>Só texto</td><td>Até <b>500 caracteres</b>. A API recusa se passar (o Threads cortaria o resto).</td></tr>
+            <tr><td>Fotos e vídeos</td><td>Até <b>4 itens</b> por post, com o texto junto. Um vídeo sozinho sai como vídeo no feed.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>LinkedIn (páginas de empresa)</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Tipo</th><th>Regras</th></tr></thead>
+          <tbody>
+            <tr><td>Só texto</td><td>Aceito.</td></tr>
+            <tr><td>Fotos</td><td>Até <b>20 fotos</b> por post.</td></tr>
+            <tr><td>Vídeo</td><td><b>Um vídeo</b> sozinho, sem fotos junto.</td></tr>
+          </tbody>
+        </table></div>
+        <ul><li>Com as credenciais do Post for Me, o LinkedIn conecta <b>páginas de empresa</b> que a pessoa administra, não o perfil pessoal.</li></ul>
+
+        <h3>Bluesky</h3>
+        <div class="tbl-wrap"><table class="doc">
+          <thead><tr><th>Tipo</th><th>Regras</th></tr></thead>
+          <tbody>
+            <tr><td>Texto</td><td>Até <b>300 caracteres</b>. A API recusa se passar.</td></tr>
+            <tr><td>Fotos</td><td>Até <b>4 fotos</b>. Fotos acima de cerca de 1 MB são reduzidas automaticamente antes de enviar.</td></tr>
+            <tr><td>Vídeo</td><td><b>Um vídeo</b> sozinho; vídeos grandes são comprimidos para caber no limite do Bluesky.</td></tr>
+          </tbody>
+        </table></div>
+        <ul><li>Para conectar, é preciso o usuário e uma <b>senha de app</b> do Bluesky (veja <a href="#connect-account">POST /accounts/connect</a>).</li></ul>
+
+        <p>Numa publicação para várias redes, o texto de cada conta precisa caber na rede dela: use <code>caption_overrides</code> para dar um texto mais curto às contas do Threads e do Bluesky.</p>
+
         <h3>Vídeo que funciona em todas as redes de uma vez</h3>
         <p>Um arquivo com estas características serve para Reels do Instagram, Reels do Facebook e TikTok ao mesmo tempo:</p>
         <ul>
@@ -565,7 +615,7 @@ curl -X POST "{BASE}/posts" \
       <section class="guia" id="videos" data-guia="Publicar vídeo (Reels e TikTok)" data-grupo-nav="Publicar" data-busca="vídeo video reels tiktok upload capa thumbnail enviar arquivo">
         <span class="eyebrow-api">Guia prático</span>
         <h2>Publicar vídeo: Reels no Instagram e no Facebook e vídeo no TikTok</h2>
-        <p>Uma única publicação pode levar o mesmo vídeo para contas das três redes. O passo a passo:</p>
+        <p>Uma única publicação pode levar o mesmo vídeo para contas de Instagram, Facebook, TikTok, YouTube, Threads, LinkedIn e Bluesky. O passo a passo:</p>
         <ol class="passos">
           <li><b>Prepare o arquivo</b> seguindo o <a href="#requisitos">vídeo que funciona em todas as redes</a> (MP4, H.264, 1080 × 1920, 5 a 90 s).</li>
           <li><b>Suba o vídeo</b> (e a capa, se tiver uma imagem de capa):
@@ -978,6 +1028,14 @@ http_response_code(200);
       <section class="guia" id="mudancas" data-guia="Histórico de versões" data-grupo-nav="Avisos e integrações" data-busca="changelog versão mudanças novidades">
         <span class="eyebrow-api">Versões</span>
         <h2>Histórico de versões</h2>
+        <h3>1.2.0 · 15/09/2026</h3>
+        <ul>
+          <li>Redes novas: <b>YouTube</b>, <b>Threads</b>, <b>LinkedIn</b> (páginas de empresa), <b>TikTok Business</b> e <b>Bluesky</b>, para conectar, publicar e acompanhar o desempenho.</li>
+          <li><code>platform_options.youtube</code> (título, privacidade, feito para crianças, tags, categoria e conteúdo gerado por IA) e <code>platform_options.tiktok_business</code>.</li>
+          <li><a href="#connect-account"><code>POST /accounts/connect</code></a> aceita <code>bluesky.handle</code> e <code>bluesky.app_password</code>.</li>
+          <li>A API recusa texto acima do limite do Threads (500 caracteres) e do Bluesky (300), conta a conta, já considerando <code>caption_overrides</code>.</li>
+          <li>Times sem limite de contas: <code>max_accounts</code> vem <code>null</code>.</li>
+        </ul>
         <h3>1.1.0 · 14/09/2026</h3>
         <ul>
           <li><a href="#connect-account"><code>POST /accounts/connect</code></a> aceita <code>account_id</code> para reconectar ou pedir de novo as permissões de uma conta que já está no time. Antes, a autorização de uma conta que já existia voltava recusada com <code>External Id already exists for account …</code>.</li>

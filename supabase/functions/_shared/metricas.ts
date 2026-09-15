@@ -66,6 +66,36 @@ export function mapMetrics(platform: string, m: unknown): Numeros {
       avg_watch_ms: primeiro(x.average_time_watched), total_watch_ms: primeiro(x.total_time_watched),
     };
   }
+  if (platform === "youtube") {
+    const segundos = num(x.averageViewDuration), minutos = num(x.estimatedMinutesWatched);
+    return {
+      views: primeiro(x.views), reach: null, likes: primeiro(x.likes), comments: primeiro(x.comments), shares: primeiro(x.shares), saved: null,
+      follows: primeiro(x.subscribersGained), profile_visits: null, total_interactions: null,
+      avg_watch_ms: segundos === null ? null : segundos * 1000, total_watch_ms: minutos === null ? null : minutos * 60_000,
+    };
+  }
+  if (platform === "threads") {
+    const partes = [num(x.reposts), num(x.quotes), num(x.shares)];
+    return {
+      views: primeiro(x.views), reach: null, likes: primeiro(x.likes), comments: primeiro(x.replies),
+      shares: partes.every((v) => v === null) ? null : partes.reduce((s: number, v) => s + (v ?? 0), 0),
+      saved: null, follows: null, profile_visits: null, total_interactions: null, avg_watch_ms: null, total_watch_ms: null,
+    };
+  }
+  if (platform === "linkedin") {
+    return {
+      views: primeiro(x.videoView, x.impressionCount), reach: null, likes: primeiro(x.likeCount), comments: primeiro(x.commentCount),
+      shares: primeiro(x.shareCount), saved: null, follows: null, profile_visits: null, total_interactions: null, avg_watch_ms: null, total_watch_ms: null,
+    };
+  }
+  if (platform === "bluesky") {
+    const partes = [num(x.repostCount), num(x.quoteCount)];
+    return {
+      views: null, reach: null, likes: primeiro(x.likeCount), comments: primeiro(x.replyCount),
+      shares: partes.every((v) => v === null) ? null : partes.reduce((s: number, v) => s + (v ?? 0), 0),
+      saved: null, follows: null, profile_visits: null, total_interactions: null, avg_watch_ms: null, total_watch_ms: null,
+    };
+  }
   return {
     views: primeiro(x.views, x.plays, x.video_views), reach: primeiro(x.reach), likes: primeiro(x.likes, x.like_count),
     comments: primeiro(x.comments, x.comments_count), shares: primeiro(x.shares), saved: primeiro(x.saved), follows: primeiro(x.follows),

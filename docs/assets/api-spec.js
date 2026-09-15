@@ -3,7 +3,7 @@
 // que a página gera para importar no Postman, Insomnia, n8n etc.
 // Textos em HTML simples; {BASE} vira o endereço da API na hora de mostrar.
 
-export const VERSION = "1.1.0";
+export const VERSION = "1.2.0";
 export const UPDATED = "14/09/2026";
 
 // ------------------------------------------------------------------ exemplos reutilizados
@@ -110,7 +110,16 @@ const PLATFORM_OPTIONS = [
   { name: "facebook", type: "object", desc: "Opções do Facebook (Páginas).", children: [
     { name: "set_caption_for_each_image", type: "boolean", desc: "Carrossel: repetir a legenda em cada foto.", default: true },
   ] },
-  { name: "tiktok", type: "object", desc: "Opções do TikTok.", children: [
+  { name: "youtube", type: "object", desc: "Opções do YouTube.", children: [
+    { name: "title", type: "string", desc: "Título do vídeo (até 100 caracteres). Vazio = primeira linha da legenda. A legenda inteira vira a descrição do vídeo." },
+    { name: "privacy_status", type: "string", enum: ["public", "unlisted", "private"], desc: "Quem pode ver: público, não listado (só com o link) ou privado.", default: "public" },
+    { name: "made_for_kids", type: "boolean", desc: "Declara que o vídeo é feito para crianças (regra do YouTube).", default: false },
+    { name: "tags", type: "string[]", desc: "Tags do vídeo, até 500 caracteres somando todas. Ex.: <code>[\"ofertas\", \"bahia\"]</code>." },
+    { name: "category_id", type: "string", desc: "Categoria do YouTube (ex.: <code>\"22\"</code> = Pessoas e blogs). Sem ela, fica a padrão do canal." },
+    { name: "contains_synthetic_media", type: "boolean", desc: "Marca como conteúdo alterado ou gerado por IA (o YouTube mostra um aviso no vídeo).", default: false },
+  ] },
+  { name: "tiktok_business", type: "object", desc: "Opções do TikTok Business: os mesmos campos de <code>tiktok</code>. Sem este objeto, vale o que veio em <code>tiktok</code>." },
+  { name: "tiktok", type: "object", desc: "Opções do TikTok (e do TikTok Business, quando <code>tiktok_business</code> não vier).", children: [
     { name: "title", type: "string", desc: "Título (até 85 caracteres). Vazio = começo da legenda." },
     { name: "privacy_status", type: "string", enum: ["public", "private"], desc: "Quem pode ver.", default: "public" },
     { name: "allow_comment", type: "boolean", desc: "Permitir comentários.", default: true },
@@ -123,11 +132,11 @@ const PLATFORM_OPTIONS = [
   ] },
 ];
 const CORPO_POST = [
-  { name: "caption", type: "string", required: true, desc: "Legenda principal (até 2.200 caracteres). Pode ter emojis, quebras de linha (<code>\\n</code>), #hashtags e @menções. Pode ficar vazia só em Stories e em post só de Facebook com mídia." },
+  { name: "caption", type: "string", required: true, desc: "Legenda principal (até 2.200 caracteres). Pode ter emojis, quebras de linha (<code>\\n</code>), #hashtags e @menções. Pode ficar vazia só em Stories e em post só de Facebook com mídia. No <b>Threads</b> o texto de cada conta vai até 500 caracteres e no <b>Bluesky</b> até 300: use <code>caption_overrides</code> para dar uma versão menor a essas contas." },
   { name: "account_ids", type: "string[]", required: true, desc: "Ids das contas que recebem a publicação (GET /accounts). Pode ser vazio se mandar <code>group_ids</code>. Todas precisam estar conectadas." },
   { name: "group_ids", type: "string[]", desc: "Ids de grupos (GET /groups): as contas deles entram junto com <code>account_ids</code>, sem repetir." },
-  { name: "media", type: "array", desc: "Fotos e vídeos, na ordem do carrossel. Cada item pode ser só o link (string) ou um objeto:", children: MIDIA_ITEM },
-  { name: "placement", type: "string", enum: ["timeline", "reels", "stories"], default: "timeline", desc: "Onde sai no Instagram e no Facebook: <code>timeline</code> = Feed (foto, vídeo ou carrossel), <code>reels</code>, <code>stories</code>. No TikTok não muda nada." },
+  { name: "media", type: "array", desc: "Fotos e vídeos, na ordem do carrossel. Facebook, Threads, LinkedIn e Bluesky aceitam post sem mídia. Cada item pode ser só o link (string) ou um objeto:", children: MIDIA_ITEM },
+  { name: "placement", type: "string", enum: ["timeline", "reels", "stories"], default: "timeline", desc: "Onde sai no Instagram e no Facebook: <code>timeline</code> = Feed (foto, vídeo ou carrossel), <code>reels</code>, <code>stories</code>. No TikTok, TikTok Business, YouTube, Threads, LinkedIn e Bluesky não muda nada." },
   { name: "scheduled_at", type: "string | null", desc: "Quando publicar, em ISO 8601. <b>Sem fuso</b> (ex.: <code>2026-09-20T18:00</code>) vale o horário da Bahia. Com fuso (<code>…Z</code> ou <code>…-03:00</code>) vale o que veio. <code>null</code>, <code>\"now\"</code> ou não mandar = publicar agora (sai em até 2 minutos). Precisa estar no futuro." },
   { name: "title", type: "string", desc: "Nome interno para achar a publicação depois (até 80 caracteres). Não aparece nas redes." },
   { name: "vary_captions", type: "boolean | string", enum: [true, false, "auto", "ai", "local"], desc: "Gera uma legenda diferente para cada conta, a partir de <code>caption</code>. A primeira conta fica com a original; as outras sem legenda própria em <code>caption_overrides</code> ganham uma versão. <code>true</code> = <code>\"auto\"</code> (IA do time se ligada, senão o gerador automático). Veja <a href=\"#variacoes\">Variações de legenda</a>." },
@@ -148,7 +157,7 @@ export const GROUPS = [
         title: "Conferir a chave",
         summary: "Diz qual chave está sendo usada, o time dela, se é só leitura, as contas liberadas e o limite por minuto.",
         desc: "<p>É a primeira chamada a fazer numa integração nova: se voltar <code>200</code>, a chave e o endereço estão certos.</p>",
-        response: { status: 200, body: { via: "api_key", key: { id: "5d1c0b9a-7e6f-4d3c-b2a1-908f7e6d5c4b", name: "n8n", prefix: "ifk_a1B2c3D4", scopes: [], read_only: false, account_ids: null, rate_limit: 120 }, team: { id: "c0ffee00-1234-4abc-9def-0123456789ab", name: "Loja Centro", accounts: 12, max_accounts: 20, max_posts_month: 1000 } } },
+        response: { status: 200, body: { via: "api_key", key: { id: "5d1c0b9a-7e6f-4d3c-b2a1-908f7e6d5c4b", name: "n8n", prefix: "ifk_a1B2c3D4", scopes: [], read_only: false, account_ids: null, rate_limit: 120 }, team: { id: "c0ffee00-1234-4abc-9def-0123456789ab", name: "Loja Centro", accounts: 12, max_accounts: null, max_posts_month: 1000 } } },
         errors: [[401, "sem_autorizacao"], [401, "chave_invalida"], [401, "chave_revogada"], [429, "limite_chamadas"]],
       },
       {
@@ -156,14 +165,14 @@ export const GROUPS = [
         title: "Dados do time",
         summary: "Nome do time, contas conectadas, limite de contas e uso do mês (conta a conta).",
         desc: "<p><code>month_used</code> soma o que já foi publicado e o que está agendado para este mês, contando <b>cada conta</b> que recebe uma publicação (1 post em 10 contas = 10).</p>",
-        response: { status: 200, body: { id: "c0ffee00-1234-4abc-9def-0123456789ab", name: "Loja Centro", role: "api", accounts: 12, max_accounts: 20, month_used: 184, max_posts_month: 1000 } },
+        response: { status: 200, body: { id: "c0ffee00-1234-4abc-9def-0123456789ab", name: "Loja Centro", role: "api", accounts: 12, max_accounts: null, month_used: 184, max_posts_month: 1000 } },
       },
       {
         id: "get-usage", method: "GET", path: "/usage", auth: "read",
         title: "Uso do mês e do plano",
         summary: "Quanto o time já usou no mês e quanto o plano inteiro (todos os times) já usou.",
         desc: "<p>O plano do Post for Me permite <b>1.000 publicações por mês, conta a conta, somando todos os times</b>. A API recusa uma publicação nova quando ela passaria do limite do time ou do plano (erro <code>400</code> com a conta explicada).</p>",
-        response: { status: 200, body: { team: { id: "c0ffee00-1234-4abc-9def-0123456789ab", name: "Loja Centro", role: "api", max_accounts: 20 }, month_published: 131, month_reserved: 184, month_limit: 1000, plan_used: 402, plan_limit: 1000, webhook: { id: "wbh_iXyhiF3oyitrTzFHPFeg", url: "{SUPABASE}/functions/v1/pfm-webhook", since: "2026-09-10T23:40:00.000Z" }, last_event: { received_at: "2026-09-14T14:59:31.000Z", event_type: "social.post.result.created" } } },
+        response: { status: 200, body: { team: { id: "c0ffee00-1234-4abc-9def-0123456789ab", name: "Loja Centro", role: "api", max_accounts: null }, month_published: 131, month_reserved: 184, month_limit: 1000, plan_used: 402, plan_limit: 1000, webhook: { id: "wbh_iXyhiF3oyitrTzFHPFeg", url: "{SUPABASE}/functions/v1/pfm-webhook", since: "2026-09-10T23:40:00.000Z" }, last_event: { received_at: "2026-09-14T14:59:31.000Z", event_type: "social.post.result.created" } } },
       },
       {
         id: "get-health", method: "GET", path: "/health", auth: "read",
@@ -184,7 +193,7 @@ export const GROUPS = [
         title: "Listar contas",
         summary: "Todas as contas do time (ou só as liberadas para a chave), com seguidores e posts das últimas 24 horas.",
         query: [
-          { name: "platform", type: "string", enum: ["instagram", "facebook", "tiktok"], desc: "Só uma rede." },
+          { name: "platform", type: "string", enum: ["instagram", "facebook", "tiktok", "youtube", "threads", "linkedin", "tiktok_business", "bluesky"], desc: "Só uma rede." },
           { name: "status", type: "string", enum: ["connected", "disconnected"], desc: "Só conectadas ou só desconectadas." },
           { name: "archived", type: "boolean", desc: "<code>true</code> inclui contas removidas que ficaram arquivadas por terem histórico.", default: false },
         ],
@@ -213,9 +222,13 @@ export const GROUPS = [
         title: "Conectar conta (link de autorização)",
         summary: "Gera o link que a pessoa abre no navegador para autorizar a conta dela.",
         body: [
-          { name: "platform", type: "string", enum: ["instagram", "facebook", "tiktok"], default: "instagram", desc: "Rede a conectar. Com <code>account_id</code>, vale a rede da conta." },
+          { name: "platform", type: "string", enum: ["instagram", "facebook", "tiktok", "youtube", "threads", "linkedin", "tiktok_business", "bluesky"], default: "instagram", desc: "Rede a conectar. Com <code>account_id</code>, vale a rede da conta." },
           { name: "account_id", type: "string", desc: "Id (spc_…) de uma conta que <b>já está no time</b>, para reconectar ou pedir de novo as permissões dela (por exemplo, as de métricas). A autorização leva a identificação dessa conta: sem ela, o serviço de publicação recusa a conta que já existe. Não conta no limite de contas, e a resposta repete o <code>account_id</code>." },
-          { name: "reconnect", type: "boolean", default: false, desc: "<code>true</code> não conta no limite de contas. Para uma conta que já está no time, mande <code>account_id</code>." },
+          { name: "reconnect", type: "boolean", default: false, desc: "<code>true</code> não conta no limite de contas (quando o time tem um). Para uma conta que já está no time, mande <code>account_id</code>." },
+          { name: "bluesky", type: "object", desc: "Só para <code>platform: \"bluesky\"</code>, que não tem tela de login.", children: [
+            { name: "handle", type: "string", required: true, desc: "Usuário do Bluesky, ex.: <code>loja.bsky.social</code> (sem o @; sem ponto, vira <code>usuario.bsky.social</code>)." },
+            { name: "app_password", type: "string", required: true, desc: "Senha de app criada no Bluesky (Configurações → Privacidade e segurança → Senhas de app). Não é a senha da conta. Vai direto para o serviço de publicação; o InstaFlow não guarda." },
+          ] },
         ],
         example: { body: { platform: "instagram" } },
         desc: `<ol class="passos">
@@ -519,7 +532,7 @@ export const GROUPS = [
         summary: "Os posts mais recentes das contas (publicados pelo InstaFlow ou não) com seus números.",
         query: [
           { name: "account_id", type: "string", desc: "Só uma conta." },
-          { name: "platform", type: "string", enum: ["instagram", "facebook", "tiktok"], desc: "Só uma rede." },
+          { name: "platform", type: "string", enum: ["instagram", "facebook", "tiktok", "youtube", "threads", "linkedin", "tiktok_business", "bluesky"], desc: "Só uma rede." },
           { name: "since", type: "string", desc: "Publicados a partir de (ISO 8601)." },
           { name: "post_id", type: "string", desc: "Só os posts de uma publicação do InstaFlow." },
           { name: "order", type: "string", enum: ["posted_at", "views", "reach", "likes", "comments", "shares", "saved", "total_interactions"], default: "posted_at", desc: "Ordena do maior para o menor." },

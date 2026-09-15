@@ -92,7 +92,7 @@ export interface Caller {
   teamId: string;
   teamName: string;
   role: "owner" | "admin" | "editor" | "api";
-  maxAccounts: number;
+  maxAccounts: number | null; // nulo = sem limite de contas
   maxPostsMonth: number;
   via: "jwt" | "key";
   apiKey?: ApiKeyInfo;
@@ -137,7 +137,7 @@ export async function requireMember(req: Request): Promise<Caller> {
     teamId: m.team_id,
     teamName: team?.name ?? "Time",
     role: m.role as Caller["role"],
-    maxAccounts: team?.max_accounts ?? 20,
+    maxAccounts: team?.max_accounts ?? null,
     maxPostsMonth: team?.max_posts_month ?? 1000,
     via: "jwt",
   };
@@ -166,7 +166,7 @@ async function requireApiKey(req: Request): Promise<Caller> {
     teamId: k.team_id,
     teamName: team.name ?? "Time",
     role: "api",
-    maxAccounts: team.max_accounts ?? 20,
+    maxAccounts: team.max_accounts ?? null,
     maxPostsMonth: team.max_posts_month ?? 1000,
     via: "key",
     apiKey,

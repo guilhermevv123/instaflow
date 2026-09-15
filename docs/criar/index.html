@@ -26,7 +26,7 @@
         <div class="field"><span class="label">Tipo</span>
           <div class="seg" id="placement"><button type="button" data-v="timeline" class="on">Feed</button><button type="button" data-v="reels">Reels</button><button type="button" data-v="stories">Stories</button></div>
           <p class="help" id="placement-help">Feed: 1 foto/vídeo ou carrossel de até 10 itens.</p>
-          <p class="help">Feed, Reels e Stories valem para Instagram e Facebook. O TikTok recebe o vídeo ou as fotos do jeito que estão.</p>
+          <p class="help">Feed, Reels e Stories valem para Instagram e Facebook. TikTok, YouTube, Threads, LinkedIn e Bluesky recebem o vídeo, as fotos ou o texto do jeito que estão.</p>
         </div>
         <div class="field"><span class="label">Mídia</span>
           <div class="drop" id="drop">Arraste fotos ou vídeos aqui, ou <u>clique para escolher</u>. <span class="small">JPG, PNG, WebP, MP4, MOV.</span></div>
@@ -66,6 +66,21 @@
             <label class="check small"><input type="checkbox" id="tt_branded"> Conteúdo de marca (parceria paga)</label>
             <label class="check small"><input type="checkbox" id="tt_ai"> Gerado por IA</label>
           </div>
+        </div>
+        <div class="net-card" id="yt-opts" hidden>
+          <h3 id="yt-opts-h">YouTube</h3>
+          <p class="help">Só vídeo. Vertical de até 3 minutos aparece como Shorts. A descrição do vídeo é a legenda.</p>
+          <div class="field"><label for="yt_title">Título (até 100 caracteres; vazio = primeira linha da legenda)</label><input id="yt_title" type="text" maxlength="100" placeholder="Ex.: Ofertas de sexta na Loja Centro"><span class="help" id="yt-title-count"></span></div>
+          <div class="field"><label for="yt_privacy">Quem pode ver</label><select id="yt_privacy" class="input" style="width:auto"><option value="public">Público</option><option value="unlisted">Não listado (só com o link)</option><option value="private">Privado</option></select></div>
+          <div class="field"><label for="yt_tags">Tags (opcional, separadas por vírgula)</label><input id="yt_tags" type="text" placeholder="ofertas, bahia, promoção"></div>
+          <div class="inline">
+            <label class="check small"><input type="checkbox" id="yt_kids"> Feito para crianças</label>
+            <label class="check small"><input type="checkbox" id="yt_ai"> Tem conteúdo alterado ou gerado por IA</label>
+          </div>
+        </div>
+        <div class="net-card" id="outras-opts" hidden>
+          <h3 id="outras-opts-h">Threads, LinkedIn e Bluesky</h3>
+          <ul class="small muted" id="outras-regras" style="margin:0;padding-left:18px;display:grid;gap:3px"></ul>
         </div>
       </section>
       <section class="card">
@@ -108,12 +123,26 @@
 
   // ------------------------------------------------------------- redes das contas escolhidas
   const selectedPlatforms = () => new Set([...state.selected].map((id) => accById.get(id)?.platform || "instagram"));
-  for (const [id, p] of [["#ig-opts-h", "instagram"], ["#fb-opts-h", "facebook"], ["#tt-opts-h", "tiktok"]]) $(id).innerHTML = `${platformIcon(p, 20)} ${esc(PLATFORMS[p].label)}`;
+  for (const [id, p] of [["#ig-opts-h", "instagram"], ["#fb-opts-h", "facebook"], ["#yt-opts-h", "youtube"]]) $(id).innerHTML = `${platformIcon(p, 20)} ${esc(PLATFORMS[p].label)}`;
+  // regras das redes que não têm opções próprias (só as das contas escolhidas)
+  const OUTRAS = {
+    threads: "Threads: até 500 caracteres e até 4 fotos ou vídeos; pode ser só texto.",
+    linkedin: "LinkedIn: sai na página da empresa; um vídeo ou até 20 fotos; pode ser só texto.",
+    bluesky: "Bluesky: até 300 caracteres e um vídeo ou até 4 fotos; pode ser só texto.",
+  };
   function renderNetOptions() {
     const p = selectedPlatforms();
     $("#ig-opts").hidden = !p.has("instagram");
     $("#fb-opts").hidden = !p.has("facebook");
-    $("#tt-opts").hidden = !p.has("tiktok");
+    // TikTok e TikTok Business usam as mesmas opções
+    const tiktoks = ["tiktok", "tiktok_business"].filter((r) => p.has(r));
+    $("#tt-opts").hidden = !tiktoks.length;
+    if (tiktoks.length) $("#tt-opts-h").innerHTML = `${platformIcon(tiktoks[0], 20)} ${esc(tiktoks.map((r) => PLATFORMS[r].label).join(" e "))}`;
+    $("#yt-opts").hidden = !p.has("youtube");
+    const outras = Object.keys(OUTRAS).filter((r) => p.has(r));
+    $("#outras-opts").hidden = !outras.length;
+    $("#outras-opts-h").textContent = outras.map((r) => PLATFORMS[r].short).join(", ").replace(/, ([^,]*)$/, " e $1");
+    $("#outras-regras").innerHTML = outras.map((r) => `<li>${esc(OUTRAS[r])}</li>`).join("");
     $("#reels-opts").hidden = state.placement !== "reels";
     $("#collab-field").hidden = state.placement === "stories";
     $("#fb-carousel-opt").hidden = state.items.filter((i) => i.kind === "image").length < 2;
@@ -431,6 +460,12 @@
       if (ig.share_to_feed === false) $("#share_to_feed").checked = false;
       if (ig.collaborators?.length) $("#collaborators").value = ig.collaborators.join(", ");
       const fb = p.options?.facebook || {}; if (fb.set_caption_for_each_image === false) $("#fb_caption_each").checked = false;
+      const yt = p.options?.youtube || {};
+      if (yt.title) $("#yt_title").value = yt.title;
+      if (yt.privacy_status) $("#yt_privacy").value = yt.privacy_status;
+      if (Array.isArray(yt.tags)) $("#yt_tags").value = yt.tags.join(", ");
+      $("#yt_kids").checked = yt.made_for_kids === true;
+      $("#yt_ai").checked = yt.contains_synthetic_media === true;
       const tt = p.options?.tiktok || {};
       if (tt.title) $("#tt_title").value = tt.title;
       if (tt.privacy_status) $("#tt_privacy").value = tt.privacy_status;
@@ -450,6 +485,11 @@
     const nets = selectedPlatforms();
     if (nets.has("instagram") && state.placement === "timeline") for (const i of state.items) if (i.kind === "image" && !fitsPlacement(i.width, i.height, "timeline")) errors.push(`${i.name}: fora da proporção do Feed do Instagram (4:5 a 1.91:1). Clique em ✂ Ajustar na foto.`);
     if (!cap.value.trim() && state.placement !== "stories" && !(nets.size === 1 && nets.has("facebook") && state.items.length)) errors.push("Escreva uma legenda.");
+    // Threads e Bluesky cortam o texto: confere a legenda que cada conta vai receber
+    for (const [rede, max, nome] of [["threads", 500, "Threads"], ["bluesky", 300, "Bluesky"]]) {
+      const acima = [...state.selected].filter((id) => accById.get(id)?.platform === rede && ((($("#vary").checked && (state.overrides[id] || "").trim()) || cap.value.trim()).length > max));
+      if (acima.length) errors.push(`${nome}: o texto tem no máximo ${max} caracteres (${acima.map((id) => handle(accById.get(id))).join(", ")}). Encurte a legenda ou marque "Variar a legenda por conta" e escreva um texto menor para ${acima.length === 1 ? "essa conta" : "essas contas"}.`);
+    }
     if (!state.selected.size) errors.push("Escolha pelo menos uma conta.");
     const scheduled_at = state.when === "now" ? null : fmt.fromLocalInput($("#scheduled_at").value);
     if (state.when !== "now" && !scheduled_at) errors.push("Escolha data e hora.");
@@ -472,6 +512,7 @@
         instagram: { ...(state.placement === "reels" ? { share_to_feed: $("#share_to_feed").checked } : {}), ...(collaborators.length && state.placement !== "stories" ? { collaborators } : {}) },
         facebook: { set_caption_for_each_image: $("#fb_caption_each").checked },
         tiktok: { title: $("#tt_title").value.trim() || undefined, privacy_status: $("#tt_privacy").value, allow_comment: $("#tt_comment").checked, allow_duet: $("#tt_duet").checked, allow_stitch: $("#tt_stitch").checked, auto_add_music: $("#tt_music").checked, disclose_your_brand: $("#tt_brand").checked, disclose_branded_content: $("#tt_branded").checked, is_ai_generated: $("#tt_ai").checked },
+        youtube: { title: $("#yt_title").value.trim() || undefined, privacy_status: $("#yt_privacy").value, made_for_kids: $("#yt_kids").checked, contains_synthetic_media: $("#yt_ai").checked, tags: $("#yt_tags").value.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean) },
       },
     };
     const btn = $("#submit"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Enviando…`;

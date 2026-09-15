@@ -191,7 +191,8 @@ const thumb = (p, cls = "") => p.thumbnail_url
   : `<span class="${cls} sem" aria-hidden="true"></span>`;
 
 export function paintTop(el, sub, d) {
-  sub.textContent = d.temViewsPost ? `Mais vistos dos últimos ${d.dias} dias` : `Com mais curtidas e comentários nos últimos ${d.dias} dias (as visualizações aparecem depois de reconectar)`;
+  const quando = d.dias === 1 ? "hoje" : `nos últimos ${d.dias} dias`;
+  sub.textContent = d.temViewsPost ? `Mais vistos ${d.dias === 1 ? "hoje" : `dos últimos ${d.dias} dias`}` : `Com mais curtidas e comentários ${quando} (as visualizações aparecem depois de reconectar)`;
   if (!d.top.length) { el.innerHTML = `<div class="ch-empty">Nenhum post publicado neste período.</div>`; return; }
   const porId = new Map(d.contas.map((a) => [a.id, a]));
   el.innerHTML = `<div class="tops">${d.top.map((p, i) => {

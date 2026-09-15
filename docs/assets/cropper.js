@@ -18,7 +18,7 @@ export function ratiosFor(platforms, placement) {
   const p = platforms && platforms.size ? platforms : new Set(["instagram"]);
   if (p.has("instagram")) return RATIOS[placement] || RATIOS.timeline;
   if (p.has("facebook") && (placement === "stories" || placement === "reels")) return RATIOS.stories;
-  if (p.has("tiktok") && !p.has("facebook")) return RATIOS.tiktok;
+  if ((p.has("tiktok") || p.has("tiktok_business")) && !p.has("facebook")) return RATIOS.tiktok;
   return RATIOS.facebook;
 }
 const FEED_MIN = 4 / 5, FEED_MAX = 1.91;

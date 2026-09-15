@@ -21,7 +21,7 @@
   <div class="page-head">
     <div><div class="eyebrow" id="today"></div><h1 class="h1">Início</h1></div>
     <div class="actions dash-top">
-      <div class="seg" id="period" role="tablist" aria-label="Período dos gráficos"><button type="button" data-d="7">7 dias</button><button type="button" data-d="30" class="on">30 dias</button><button type="button" data-d="90">90 dias</button></div>
+      <div class="seg" id="period" role="tablist" aria-label="Período dos gráficos"><button type="button" data-d="1">Hoje</button><button type="button" data-d="7">7 dias</button><button type="button" data-d="30" class="on">30 dias</button><button type="button" data-d="90">90 dias</button></div>
       <a class="btn" href="criar/">+ Criar publicação</a>
     </div>
   </div>
@@ -111,7 +111,7 @@
   $("#today").textContent = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Bahia", weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
   let days = 30, dash = null, accounts = [];
-  try { const d = Number(localStorage.getItem("if.dash.days")); if ([7, 30, 90].includes(d)) days = d; } catch {}
+  try { const d = Number(localStorage.getItem("if.dash.days")); if ([1, 7, 30, 90].includes(d)) days = d; } catch {}
   const markPeriod = () => $("#period").querySelectorAll("[data-d]").forEach((b) => { const on = Number(b.dataset.d) === days; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
   markPeriod();
 

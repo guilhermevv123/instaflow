@@ -78,7 +78,8 @@ export function validateSet(items, placement, platforms = new Set()) {
   const errors = [], warnings = [];
   const p = platforms.size ? platforms : new Set(["instagram"]);
   const videos = items.filter((i) => i.kind === "video"), images = items.filter((i) => i.kind === "image");
-  if (!items.length && !(p.size === 1 && p.has("facebook"))) errors.push("Adicione pelo menos uma foto ou vídeo.");
+  // Facebook, Threads, LinkedIn e Bluesky aceitam post só de texto; as outras precisam de mídia
+  if (!items.length && ["instagram", "tiktok", "tiktok_business", "youtube"].some((r) => p.has(r))) errors.push("Adicione pelo menos uma foto ou vídeo.");
   if (items.length > 32) errors.push("Máximo de 32 itens por publicação.");
   if (p.has("instagram")) {
     if (items.length > 10) errors.push("Instagram: máximo de 10 itens no carrossel.");
@@ -95,12 +96,26 @@ export function validateSet(items, placement, platforms = new Set()) {
     if (placement === "reels" && (items.length !== 1 || items[0]?.kind !== "video")) errors.push("Facebook: Reels precisa de exatamente um vídeo.");
     if (placement === "stories" && items.length > 1) errors.push("Facebook: Stories aceita uma foto ou um vídeo por publicação.");
   }
-  if (p.has("tiktok")) {
-    if (videos.length > 1 || (videos.length === 1 && images.length)) errors.push("TikTok: ou um vídeo sozinho, ou só fotos (até 32).");
+  for (const [rede, nome] of [["tiktok", "TikTok"], ["tiktok_business", "TikTok Business"]]) {
+    if (!p.has(rede)) continue;
+    if (videos.length > 1 || (videos.length === 1 && images.length)) errors.push(`${nome}: ou um vídeo sozinho, ou só fotos (até 32).`);
     const big = images.find((i) => i.size > 20 * MB);
-    if (big) errors.push(`TikTok: ${big.name} passa de 20 MB (limite para fotos).`);
-    if (videos.length === 1 && videos[0].type && !["video/mp4", "video/quicktime", "video/webm"].includes(videos[0].type)) errors.push("TikTok: vídeo precisa ser MP4, MOV ou WebM.");
-    if (images.length && !p.has("instagram")) warnings.push("TikTok ajusta as fotos para 9:16, 3:4, 1:1 ou 16:9. Use ✂ Ajustar para escolher.");
+    if (big) errors.push(`${nome}: ${big.name} passa de 20 MB (limite para fotos).`);
+    if (videos.length === 1 && videos[0].type && !["video/mp4", "video/quicktime", "video/webm"].includes(videos[0].type)) errors.push(`${nome}: vídeo precisa ser MP4, MOV ou WebM.`);
+    if (images.length && !p.has("instagram")) warnings.push(`${nome} ajusta as fotos para 9:16, 3:4, 1:1 ou 16:9. Use ✂ Ajustar para escolher.`);
+  }
+  if (p.has("youtube")) {
+    if (items.length && (items.length !== 1 || videos.length !== 1)) errors.push("YouTube: publique exatamente um vídeo (fotos não entram no YouTube).");
+    else if (videos.length === 1 && videos[0].duration && videos[0].duration <= 180 && videos[0].height > videos[0].width) warnings.push("YouTube: vídeo vertical de até 3 minutos aparece como Shorts.");
+  }
+  if (p.has("threads") && items.length > 4) errors.push("Threads: no máximo 4 fotos ou vídeos por post.");
+  if (p.has("linkedin")) {
+    if (videos.length > 1 || (videos.length === 1 && images.length)) errors.push("LinkedIn: ou um vídeo sozinho, ou só fotos (até 20).");
+    if (images.length > 20) errors.push("LinkedIn: no máximo 20 fotos por post.");
+  }
+  if (p.has("bluesky")) {
+    if (videos.length > 1 || (videos.length === 1 && images.length)) errors.push("Bluesky: ou um vídeo sozinho, ou só fotos (até 4).");
+    if (images.length > 4) errors.push("Bluesky: no máximo 4 fotos por post.");
   }
   for (const it of items) {
     // regras de arquivo do Instagram só quando ele está entre as redes escolhidas

@@ -44,10 +44,10 @@ import { listData, pfm, PfmError, pfmListAll, type PfmAccount, type PfmPost, typ
 import { applyResult } from "../_shared/resultados.ts";
 import { accountAllowed, background, type Caller, canWrite, corsHeaders, HttpError, isAdmin, json, readJson, requireMember, serviceClient, sha256Hex, SUPABASE_URL, teamOf, teamTag } from "../_shared/util.ts";
 import { emit } from "../_shared/webhooks-time.ts";
+import { isSupported, type Platform, SUPPORTED } from "../_shared/redes.ts";
 
-// Redes que o painel sabe publicar (ids do Post for Me).
-export const SUPPORTED = ["instagram", "facebook", "tiktok"] as const;
-type Platform = typeof SUPPORTED[number];
+// Redes que o painel sabe publicar (ids do Post for Me): lista única em _shared/redes.ts.
+export { SUPPORTED };
 
 const WEBHOOK_EVENTS = [
   "social.post.result.created",
@@ -66,19 +66,30 @@ interface MediaInput {
   skip_processing?: boolean | null; // já ajustada no painel: o Post for Me não mexe
 }
 
+interface TikTokOptions {
+  title?: string;
+  privacy_status?: "public" | "private";
+  allow_comment?: boolean;
+  allow_duet?: boolean;
+  allow_stitch?: boolean;
+  disclose_your_brand?: boolean;
+  disclose_branded_content?: boolean;
+  is_ai_generated?: boolean;
+  auto_add_music?: boolean;
+}
+
 interface PlatformOptions {
   instagram?: { share_to_feed?: boolean; collaborators?: string[] };
   facebook?: { set_caption_for_each_image?: boolean };
-  tiktok?: {
-    title?: string;
-    privacy_status?: "public" | "private";
-    allow_comment?: boolean;
-    allow_duet?: boolean;
-    allow_stitch?: boolean;
-    disclose_your_brand?: boolean;
-    disclose_branded_content?: boolean;
-    is_ai_generated?: boolean;
-    auto_add_music?: boolean;
+  tiktok?: TikTokOptions;
+  tiktok_business?: TikTokOptions;
+  youtube?: {
+    title?: string; // até 100 caracteres; sem título, vai a primeira linha da legenda
+    privacy_status?: "public" | "unlisted" | "private";
+    made_for_kids?: boolean;
+    tags?: string[];
+    category_id?: string;
+    contains_synthetic_media?: boolean;
   };
 }
 
@@ -147,22 +158,37 @@ async function normalizeInput(db: Db, caller: Caller, input: PostInput): Promise
 }
 
 // Aceita o formato antigo (options = Instagram) e o novo (por rede).
+function normalizeTikTok(tt: TikTokOptions | undefined): TikTokOptions {
+  return {
+    title: tt?.title?.trim().slice(0, 85) || undefined,
+    privacy_status: tt?.privacy_status === "private" ? "private" : "public",
+    allow_comment: tt?.allow_comment ?? true,
+    allow_duet: tt?.allow_duet ?? true,
+    allow_stitch: tt?.allow_stitch ?? true,
+    disclose_your_brand: tt?.disclose_your_brand ?? false,
+    disclose_branded_content: tt?.disclose_branded_content ?? false,
+    is_ai_generated: tt?.is_ai_generated ?? false,
+    auto_add_music: tt?.auto_add_music ?? true,
+  };
+}
 function normalizeOptions(input: PostInput): PlatformOptions {
   const po = input.platform_options ?? {};
   const ig = po.instagram ?? input.options ?? {};
+  const yt = po.youtube ?? {};
+  const tags = Array.isArray(yt.tags) ? yt.tags.map((t) => String(t).trim().replace(/^#/, "")).filter(Boolean).slice(0, 30) : [];
   return {
     instagram: { share_to_feed: ig.share_to_feed, collaborators: ig.collaborators?.slice(0, 3) },
     facebook: { set_caption_for_each_image: po.facebook?.set_caption_for_each_image ?? true },
-    tiktok: {
-      title: po.tiktok?.title?.trim().slice(0, 85) || undefined,
-      privacy_status: po.tiktok?.privacy_status === "private" ? "private" : "public",
-      allow_comment: po.tiktok?.allow_comment ?? true,
-      allow_duet: po.tiktok?.allow_duet ?? true,
-      allow_stitch: po.tiktok?.allow_stitch ?? true,
-      disclose_your_brand: po.tiktok?.disclose_your_brand ?? false,
-      disclose_branded_content: po.tiktok?.disclose_branded_content ?? false,
-      is_ai_generated: po.tiktok?.is_ai_generated ?? false,
-      auto_add_music: po.tiktok?.auto_add_music ?? true,
+    tiktok: normalizeTikTok(po.tiktok),
+    // TikTok Business usa as mesmas opções; sem nada próprio, vale o que veio para o TikTok
+    tiktok_business: normalizeTikTok(po.tiktok_business ?? po.tiktok),
+    youtube: {
+      title: yt.title?.trim().slice(0, 100) || undefined,
+      privacy_status: yt.privacy_status === "unlisted" || yt.privacy_status === "private" ? yt.privacy_status : "public",
+      made_for_kids: yt.made_for_kids === true,
+      tags: tags.length ? tags : undefined,
+      category_id: yt.category_id ? String(yt.category_id).trim() || undefined : undefined,
+      contains_synthetic_media: yt.contains_synthetic_media === true,
     },
   };
 }
@@ -426,21 +452,28 @@ async function connectUrl(db: Db, caller: Caller, body: { platform?: string; rec
   } else if (caller.apiKey?.accountIds) {
     throw new HttpError(403, "Esta chave está presa a algumas contas e não pode conectar contas novas.", "conta_bloqueada");
   }
-  if (!(SUPPORTED as readonly string[]).includes(platform)) throw new HttpError(400, "Rede não suportada. Use instagram, facebook ou tiktok.");
-  if (!accountId && !body.reconnect) {
+  if (!isSupported(platform)) throw new HttpError(400, `Rede não suportada. Use uma destas: ${SUPPORTED.join(", ")}.`);
+  // limite de contas só quando o time tem um (nulo = sem limite)
+  if (!accountId && !body.reconnect && caller.maxAccounts !== null) {
     const { count } = await db.from("accounts").select("id", { count: "exact", head: true }).eq("team_id", caller.teamId).eq("archived", false);
     if ((count ?? 0) >= caller.maxAccounts) {
       throw new HttpError(400, `Este time chegou ao limite de ${caller.maxAccounts} contas. Remova uma conta ou peça para aumentar o limite.`);
     }
   }
-  // Instagram: login do próprio Instagram (sem Página do Facebook).
-  // Facebook: cada Página escolhida na autorização vira uma conta.
-  // TikTok: perfil pessoal/criador (Login Kit).
-  const platformData = platform === "instagram"
-    ? { instagram: { connection_type: "instagram" } }
-    : platform === "facebook"
-    ? { facebook: {} }
-    : { tiktok: {} };
+  // Instagram: login do próprio Instagram (sem Página do Facebook). Facebook e LinkedIn: cada
+  // Página escolhida vira uma conta (no LinkedIn, com as credenciais do Post for Me, só páginas
+  // de empresa). Bluesky não tem tela de login: vai o usuário e uma senha de app, que o Post for
+  // Me confere e guarda do lado dele (nada disso fica no InstaFlow).
+  let platformData: Record<string, unknown> = { [platform]: {} };
+  if (platform === "instagram") platformData = { instagram: { connection_type: "instagram" } };
+  if (platform === "linkedin") platformData = { linkedin: { connection_type: "organization" } };
+  if (platform === "bluesky") {
+    const bs = (body as { bluesky?: { handle?: unknown; app_password?: unknown } }).bluesky;
+    const handle = String(bs?.handle ?? "").trim().replace(/^@/, "");
+    const appPassword = String(bs?.app_password ?? "").trim();
+    if (!handle || !appPassword) throw new HttpError(400, "Bluesky: mande bluesky.handle (ex.: loja.bsky.social) e bluesky.app_password (uma senha de app criada nas configurações do Bluesky, não a senha da conta).");
+    platformData = { bluesky: { handle: handle.includes(".") ? handle : `${handle}.bsky.social`, app_password: appPassword } };
+  }
   const res = await pfm<{ url: string; platform: string }>("/social-accounts/auth-url", {
     method: "POST",
     body: {
@@ -489,7 +522,10 @@ async function removeAccount(db: Db, caller: Caller, id: string) {
 // ---------------------------------------------------------------------------
 // Regras por rede (as do Post for Me + as das próprias redes). `platforms` são
 // as redes das contas escolhidas; uma publicação pode ir para várias de uma vez.
-function validatePost(input: PostInput, platforms: Set<string>) {
+// Limite de texto por rede: o Post for Me corta o que passa sem avisar, então aqui vira erro.
+const LIMITE_TEXTO: Record<string, [number, string]> = { threads: [500, "Threads"], bluesky: [300, "Bluesky"] };
+
+function validatePost(input: PostInput, platforms: Set<string>, accs: { id: string; platform: string }[] = []) {
   const errors: string[] = [];
   const placement = input.placement ?? "timeline";
   if (!["timeline", "reels", "stories"].includes(placement)) errors.push("Tipo de post inválido.");
@@ -520,12 +556,38 @@ function validatePost(input: PostInput, platforms: Set<string>) {
     if (placement === "reels" && (media.length !== 1 || videos !== 1)) errors.push("Facebook: Reels precisa de exatamente um vídeo.");
     if (placement === "stories" && media.length !== 1) errors.push("Facebook: Stories aceita uma foto ou um vídeo por publicação.");
   }
-  if (platforms.has("tiktok")) {
-    if (media.length === 0) errors.push("TikTok: adicione um vídeo ou de 1 a 32 fotos.");
-    if (videos > 1 || (videos === 1 && images > 0)) errors.push("TikTok: ou um vídeo sozinho, ou só fotos (até 32).");
-    const tt = input.platform_options?.tiktok;
-    if (tt?.privacy_status && !["public", "private"].includes(tt.privacy_status)) errors.push("TikTok: privacidade inválida.");
-    if (tt?.title && tt.title.trim().length > 85) errors.push("TikTok: o título tem no máximo 85 caracteres.");
+  for (const [rede, nome] of [["tiktok", "TikTok"], ["tiktok_business", "TikTok Business"]] as const) {
+    if (!platforms.has(rede)) continue;
+    if (media.length === 0) errors.push(`${nome}: adicione um vídeo ou de 1 a 32 fotos.`);
+    if (videos > 1 || (videos === 1 && images > 0)) errors.push(`${nome}: ou um vídeo sozinho, ou só fotos (até 32).`);
+    const tt = input.platform_options?.[rede] ?? input.platform_options?.tiktok;
+    if (tt?.privacy_status && !["public", "private"].includes(tt.privacy_status)) errors.push(`${nome}: privacidade inválida.`);
+    if (tt?.title && tt.title.trim().length > 85) errors.push(`${nome}: o título tem no máximo 85 caracteres.`);
+  }
+  if (platforms.has("youtube")) {
+    if (media.length !== 1 || videos !== 1) errors.push("YouTube: publique exatamente um vídeo (fotos não entram no YouTube).");
+    const yt = input.platform_options?.youtube;
+    if (yt?.privacy_status && !["public", "unlisted", "private"].includes(yt.privacy_status)) errors.push("YouTube: privacidade inválida (use public, unlisted ou private).");
+    if (yt?.title && yt.title.trim().length > 100) errors.push("YouTube: o título tem no máximo 100 caracteres.");
+    if (yt?.tags !== undefined && (!Array.isArray(yt.tags) || yt.tags.join(",").length > 500)) errors.push("YouTube: tags precisam ser uma lista com até 500 caracteres somando todas.");
+  }
+  if (platforms.has("threads") && media.length > 4) errors.push("Threads: no máximo 4 fotos ou vídeos por post.");
+  if (platforms.has("linkedin")) {
+    if (videos > 1 || (videos === 1 && images > 0)) errors.push("LinkedIn: ou um vídeo sozinho, ou só fotos (até 20).");
+    if (images > 20) errors.push("LinkedIn: no máximo 20 fotos por post.");
+  }
+  if (platforms.has("bluesky")) {
+    if (videos > 1 || (videos === 1 && images > 0)) errors.push("Bluesky: ou um vídeo sozinho, ou só fotos (até 4).");
+    if (images > 4) errors.push("Bluesky: no máximo 4 fotos por post.");
+  }
+  // o texto de cada conta (a legenda própria dela, se tiver) cabe no limite da rede
+  const overrides = input.caption_overrides ?? {};
+  for (const [rede, [max, nome]] of Object.entries(LIMITE_TEXTO)) {
+    if (!platforms.has(rede)) continue;
+    const contas = accs.filter((a) => a.platform === rede);
+    const textos = contas.length ? contas.map((a) => overrides[a.id]?.trim() || caption) : [caption];
+    const acima = textos.filter((t) => t.length > max).length;
+    if (acima) errors.push(`${nome}: o texto tem no máximo ${max} caracteres e ${acima === 1 ? "uma conta ficaria acima" : `${acima} contas ficariam acima`}. Encurte a legenda ou dê uma legenda própria para ${acima === 1 ? "essa conta" : "essas contas"}.`);
   }
   if (input.scheduled_at) {
     const ts = Date.parse(input.scheduled_at);
@@ -577,9 +639,10 @@ function buildPfmBody(input: PostInput, placement: string, externalId: string, p
   if (platforms.has("facebook")) {
     platform_configurations.facebook = { placement, set_caption_for_each_image: opts.facebook?.set_caption_for_each_image ?? true };
   }
-  if (platforms.has("tiktok")) {
-    const tt = opts.tiktok ?? {};
-    platform_configurations.tiktok = {
+  for (const rede of ["tiktok", "tiktok_business"] as const) {
+    if (!platforms.has(rede)) continue;
+    const tt = opts[rede] ?? {};
+    platform_configurations[rede] = {
       title: (tt.title || caption).slice(0, 85),
       privacy_status: tt.privacy_status ?? "public",
       allow_comment: tt.allow_comment ?? true,
@@ -591,6 +654,21 @@ function buildPfmBody(input: PostInput, placement: string, externalId: string, p
       auto_add_music: tt.auto_add_music ?? true,
     };
   }
+  if (platforms.has("youtube")) {
+    const yt = opts.youtube ?? {};
+    // sem título próprio, vai a primeira linha da legenda (a descrição do vídeo é a legenda inteira)
+    const primeiraLinha = caption.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+    platform_configurations.youtube = {
+      title: (yt.title || primeiraLinha || input.title?.trim() || "Vídeo").slice(0, 100),
+      privacy_status: yt.privacy_status ?? "public",
+      made_for_kids: yt.made_for_kids ?? false,
+      ...(yt.tags?.length ? { tags: yt.tags } : {}),
+      ...(yt.category_id ? { category_id: yt.category_id } : {}),
+      ...(yt.contains_synthetic_media ? { contains_synthetic_media: true } : {}),
+    };
+  }
+  // Threads não tem Reels: vídeo sozinho sai como vídeo no feed
+  if (platforms.has("threads")) platform_configurations.threads = { placement: "timeline" };
   const accountConfigs = input.account_ids
     .filter((id) => overrides[id]?.trim() && overrides[id].trim() !== caption)
     .map((id) => ({ social_account_id: id, configuration: { caption: overrides[id].trim() } }));
@@ -618,7 +696,7 @@ async function createPost(db: Db, caller: Caller, input: PostInput) {
   input.account_ids = [...new Set(Array.isArray(input.account_ids) ? input.account_ids : [])];
   const accs = await loadAccounts(db, caller, input.account_ids);
   const platforms = new Set(accs.map((a) => a.platform as string));
-  const placement = validatePost(input, platforms);
+  const placement = validatePost(input, platforms, accs);
   await checkMonthLimit(db, caller, input.account_ids.length);
   const scheduled = input.scheduled_at ? new Date(input.scheduled_at).toISOString() : null;
   // teste sem publicar: passou por todas as regras; mostra o que iria para o Post for Me
@@ -679,7 +757,7 @@ async function updatePost(db: Db, caller: Caller, id: string, input: PostInput) 
   input.account_ids = [...new Set(Array.isArray(input.account_ids) ? input.account_ids : [])];
   const accs = await loadAccounts(db, caller, input.account_ids);
   const platforms = new Set(accs.map((a) => a.platform as string));
-  const placement = validatePost(input, platforms);
+  const placement = validatePost(input, platforms, accs);
   const scheduled = input.scheduled_at ? new Date(input.scheduled_at).toISOString() : null;
   if (!scheduled) throw new HttpError(400, "Para publicar agora, cancele esta e crie uma nova publicação.");
   const { count: before } = await db.from("post_targets").select("post_id", { count: "exact", head: true }).eq("post_id", id);

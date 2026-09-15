@@ -61,7 +61,7 @@ async function loadTeamContext() {
     id: m.team_id,
     role: m.role,
     name: m.teams?.name || "Time",
-    max_accounts: m.teams?.max_accounts ?? 20,
+    max_accounts: m.teams?.max_accounts ?? null, // nulo = sem limite de contas
     max_posts_month: m.teams?.max_posts_month ?? 1000,
   }));
   let saved = null;
@@ -315,17 +315,25 @@ export const PLATFORMS = {
   instagram: { label: "Instagram", short: "Instagram", color: "#E1306C", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.4" cy="6.6" r="1" fill="currentColor" stroke="none"/></svg>', hint: "conta Profissional (Empresa ou Criador)" },
   facebook: { label: "Facebook (Página)", short: "Facebook", color: "#1877F2", icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.5 22v-8h2.7l.4-3.2h-3.1V8.8c0-.9.3-1.6 1.6-1.6h1.7V4.4c-.3 0-1.3-.1-2.5-.1-2.5 0-4.1 1.5-4.1 4.2v2.3H7.4V14h2.8v8h3.3z"/></svg>', hint: "você precisa administrar a Página" },
   tiktok: { label: "TikTok", short: "TikTok", color: "#111111", icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.53.02C13.84 0 15.14.01 16.44 0c.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>', hint: "perfil pessoal ou de criador" },
+  youtube: { label: "YouTube", short: "YouTube", color: "#FF0033", icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.58 7.19a2.51 2.51 0 0 0-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42A2.51 2.51 0 0 0 2.42 7.19 26.3 26.3 0 0 0 2 12a26.3 26.3 0 0 0 .42 4.81 2.51 2.51 0 0 0 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42a2.51 2.51 0 0 0 1.77-1.77A26.3 26.3 0 0 0 22 12a26.3 26.3 0 0 0-.42-4.81zM10 15V9l5.2 3z"/></svg>', hint: "canal do YouTube (só vídeo)" },
+  threads: { label: "Threads", short: "Threads", color: "#111111", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M16.6 11.4c-.3-2.7-1.9-4.1-4.5-4.1-2.7 0-4.4 2-4.4 4.7s1.8 4.7 4.5 4.7c2.3 0 3.7-1.3 3.7-3.1 0-1.7-1.4-2.7-3.4-2.7-1.9 0-3.1.9-3.1 2.3 0 1.2 1 2 2.3 2"/><path d="M19.6 8.3C18.4 4.9 15.7 3 12 3 6.9 3 4 6.6 4 12s2.9 9 8 9c3.9 0 6.9-2.1 7.7-5.6"/></svg>', hint: "perfil do Threads ligado ao Instagram" },
+  linkedin: { label: "LinkedIn (Página)", short: "LinkedIn", color: "#0A66C2", icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.94 8.5H3.56V20h3.38zM5.25 3a1.97 1.97 0 1 0 0 3.94A1.97 1.97 0 0 0 5.25 3zM20.44 13.4c0-3.46-1.85-5.07-4.31-5.07-1.99 0-2.88 1.1-3.38 1.87V8.5H9.37c.04 1.13 0 11.5 0 11.5h3.38v-6.42c0-.34.02-.69.13-.93.27-.69.9-1.4 1.95-1.4 1.38 0 1.93 1.05 1.93 2.6V20h3.38z"/></svg>', hint: "página de empresa que você administra" },
+  bluesky: { label: "Bluesky", short: "Bluesky", color: "#1185FE", icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5.7 3.9C8 5.6 10.5 9.1 12 11c1.5-1.9 4-5.4 6.3-7.1 1.7-1.2 4.4-2.2 4.4.9 0 .6-.4 5.3-.6 6.1-.8 2.7-3.5 3.3-6 2.9 4.3.7 5.4 3.2 3.1 5.6-4.5 4.6-6.4-1.2-6.9-2.7l-.3-.9-.3.9c-.5 1.5-2.4 7.3-6.9 2.7-2.3-2.4-1.2-4.9 3.1-5.6-2.5.4-5.2-.2-6-2.9-.2-.8-.6-5.5-.6-6.1 0-3.1 2.7-2.1 4.4-.9z"/></svg>', hint: "usuário e senha de app do Bluesky" },
 };
+// TikTok Business: mesma marca do TikTok, para conta comercial
+PLATFORMS.tiktok_business = { ...PLATFORMS.tiktok, label: "TikTok Business", short: "TikTok Business", hint: "conta comercial do TikTok" };
+// Redes em que cada conta é uma página ou um canal (nome sem @).
+const SEM_ARROBA = new Set(["facebook", "linkedin", "youtube"]);
 export function platformOf(acc) { return PLATFORMS[acc?.platform] ? acc.platform : "instagram"; }
 export function platformIcon(p, size = 14) {
   const pf = PLATFORMS[p] || PLATFORMS.instagram;
   return `<i class="pf pf-${p}" style="--pf:${pf.color};width:${size}px;height:${size}px" title="${pf.label}" aria-label="${pf.label}">${pf.icon}</i>`;
 }
 export function platformName(p) { return (PLATFORMS[p] || PLATFORMS.instagram).label; }
-// Nome de exibição: @usuario no Instagram/TikTok; nome da Página no Facebook.
+// Nome de exibição: @usuario no Instagram, TikTok, Threads e Bluesky; nome da Página ou do canal no Facebook, LinkedIn e YouTube.
 export function handle(acc) {
   const name = acc?.username || acc?.id || "";
-  return platformOf(acc) === "facebook" ? name : `@${name}`;
+  return SEM_ARROBA.has(platformOf(acc)) || name.startsWith("@") ? name : `@${name}`;
 }
 
 export function avatar(acc, size = 28) {

@@ -28,7 +28,7 @@ const ICONS = {
 export const icon = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k] || ""}</svg>`;
 export function paintIcons(root) { root.querySelectorAll("[data-ico]").forEach((el) => { el.innerHTML = icon(el.dataset.ico); }); }
 
-const NET = { instagram: ["Instagram", "#E1306C"], facebook: ["Facebook", "#1877F2"], tiktok: ["TikTok", "#25F4EE"] };
+const NET = { instagram: ["Instagram", "#E1306C"], facebook: ["Facebook", "#1877F2"], tiktok: ["TikTok", "#25F4EE"], youtube: ["YouTube", "#FF0033"], threads: ["Threads", "#8B8F9C"], linkedin: ["LinkedIn", "#0A66C2"], tiktok_business: ["TikTok Business", "#FE2C55"], bluesky: ["Bluesky", "#1185FE"] };
 const TYPE = { timeline: ["Feed", "--accent"], reels: ["Reels", "--time"], stories: ["Stories", "#8B5CF6"] };
 const REDS = ["#7F1D1D", "#991B1B", "#B91C1C", "#DC2626", "#EF4444", "#F87171", "#FCA5A5", "#FECACA"];
 
@@ -92,15 +92,19 @@ export function paintFunil(el, badge, monthEl, data) {
   ] });
 }
 
+// Período "Hoje" (1 dia) ou "últimos N dias", com a preposição certa
+const dosDias = (n) => (n === 1 ? "de hoje" : `dos últimos ${n} dias`);
+const nosDias = (n) => (n === 1 ? "hoje" : `nos últimos ${n} dias`);
+
 export function paintDist(el, sub, data, tab) {
   if (tab === "tipo") {
-    sub.textContent = `Publicações dos últimos ${data.days} dias, por tipo`;
+    sub.textContent = `Publicações ${dosDias(data.days)}, por tipo`;
     donutChart(el, { items: (data.by_placement || []).map((x) => ({ label: TYPE[x.k]?.[0] || x.k, value: x.n, color: TYPE[x.k]?.[1] || "--muted" })), center: "publicações" });
   } else if (tab === "falhas") {
-    sub.textContent = `Falhas dos últimos ${data.days} dias, pelo motivo`;
+    sub.textContent = `Falhas ${dosDias(data.days)}, pelo motivo`;
     donutChart(el, { items: (data.failures || []).map((x, i) => ({ label: x.k, value: x.n, color: REDS[i % REDS.length] })), center: "falhas", empty: "Nenhuma falha no período. 🎉" });
   } else {
-    sub.textContent = `Publicadas nos últimos ${data.days} dias, conta a conta`;
+    sub.textContent = `Publicadas ${nosDias(data.days)}, conta a conta`;
     donutChart(el, { items: (data.by_platform || []).map((x) => ({ label: NET[x.k]?.[0] || x.k, value: x.n, color: NET[x.k]?.[1] || "--muted" })), center: "publicadas" });
   }
 }
@@ -140,12 +144,12 @@ export function paintTop(el, data, accounts) {
 export function paintAll(data, { accounts = [] } = {}) {
   const $ = (s) => document.querySelector(s);
   paintKpis($("#kpis"), data);
-  $("#ritmo-sub").textContent = `Por dia, conta a conta · últimos ${data.days} dias e o que já está agendado para os próximos 7`;
+  $("#ritmo-sub").textContent = `Por dia, conta a conta · ${data.days === 1 ? "hoje" : `últimos ${data.days} dias`} e o que já está agendado para os próximos 7`;
   paintRitmo($("#ch-ritmo"), data);
   paintFunil($("#ch-funil"), $("#funil-badge"), $("#funil-mes"), data);
   paintDist($("#ch-dist"), $("#dist-sub"), data, document.querySelector("#dist-tabs .on")?.dataset.t || "rede");
   paintMes($("#ch-mes"), data);
   heatmap($("#ch-heat"), { cells: data.heat || [] });
-  $("#top-sub").textContent = `Publicadas nos últimos ${data.days} dias`;
+  $("#top-sub").textContent = `Publicadas ${nosDias(data.days)}`;
   paintTop($("#ch-top"), data, accounts);
 }

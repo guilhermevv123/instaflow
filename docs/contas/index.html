@@ -17,7 +17,7 @@
 <header class="top"></header>
 <main class="shell">
   <div class="page-head">
-    <div><div class="eyebrow">Instagram · Facebook · TikTok</div><h1 class="h1">Contas conectadas</h1></div>
+    <div><div class="eyebrow">Todas as suas redes</div><h1 class="h1">Contas conectadas</h1></div>
     <div class="actions"><button class="btn ghost" id="sync">Sincronizar</button>
       <div class="menu-wrap"><button class="btn" id="connect" aria-haspopup="menu" aria-expanded="false">+ Conectar</button>
         <div class="menu-scrim" id="connect-scrim" hidden></div>
@@ -25,6 +25,11 @@
           <button type="button" role="menuitem" data-p="instagram"></button>
           <button type="button" role="menuitem" data-p="facebook"></button>
           <button type="button" role="menuitem" data-p="tiktok"></button>
+          <button type="button" role="menuitem" data-p="youtube"></button>
+          <button type="button" role="menuitem" data-p="threads"></button>
+          <button type="button" role="menuitem" data-p="linkedin"></button>
+          <button type="button" role="menuitem" data-p="tiktok_business"></button>
+          <button type="button" role="menuitem" data-p="bluesky"></button>
         </div>
       </div>
     </div>
@@ -51,7 +56,12 @@
         <div class="net-card"><h3 id="h-ig">Instagram</h3><ol class="small muted" style="margin:0;padding-left:18px;display:grid;gap:3px"><li>A conta precisa ser <b>Profissional</b>: no app, Perfil → ☰ → Configurações → Tipo de conta e ferramentas → "Mudar para conta profissional".</li><li>Entre no Instagram <b>com a conta certa</b> no navegador antes de conectar (a autorização usa a conta logada).</li></ol></div>
         <div class="net-card"><h3 id="h-fb">Facebook</h3><p class="small muted" style="margin:0">Publica em <b>Páginas</b>. Você precisa ser administrador da Página. Na autorização, marque as Páginas que quer usar: cada uma vira uma conta aqui.</p></div>
         <div class="net-card"><h3 id="h-tt">TikTok</h3><p class="small muted" style="margin:0">Perfil pessoal ou de criador. Entre no TikTok com a conta certa no navegador antes de conectar. Se o TikTok publicar como privado, mude a privacidade na tela Criar.</p></div>
-        <p class="help">A autorização passa pelo app "Post for Me", nosso parceiro de publicação. Nenhuma senha é guardada.</p>
+        <div class="net-card"><h3 id="h-yt">YouTube</h3><p class="small muted" style="margin:0">Entre no Google com a conta dona do canal. Só vídeo: vertical de até 3 minutos aparece como Shorts.</p></div>
+        <div class="net-card"><h3 id="h-th">Threads</h3><p class="small muted" style="margin:0">Entre no Threads (mesmo login do Instagram) com o perfil certo. Aceita post só de texto, até 500 caracteres.</p></div>
+        <div class="net-card"><h3 id="h-li">LinkedIn</h3><p class="small muted" style="margin:0">Publica em <b>páginas de empresa</b> que você administra. Na autorização, marque as páginas: cada uma vira uma conta aqui.</p></div>
+        <div class="net-card"><h3 id="h-tb">TikTok Business</h3><p class="small muted" style="margin:0">Para contas comerciais do TikTok. Entre no TikTok com a conta certa antes de conectar.</p></div>
+        <div class="net-card"><h3 id="h-bs">Bluesky</h3><p class="small muted" style="margin:0">Não abre tela de login: você informa o usuário e uma <b>senha de app</b>, criada nas configurações do Bluesky em Privacidade e segurança → Senhas de app. Até 300 caracteres por post.</p></div>
+        <p class="help">A autorização passa pelo app "Post for Me", nosso parceiro de publicação. O InstaFlow não guarda senhas: a senha de app do Bluesky vai direto para o Post for Me.</p>
       </section>
     </div>
   </div>
@@ -60,6 +70,13 @@
     <div class="field"><label for="group-name">Nome</label><input id="group-name" type="text" required maxlength="40"></div>
     <div class="field"><span class="label">Contas</span><div class="acct-pick" id="group-accts"></div></div>
     <div class="split"><button type="button" class="btn danger small" id="group-delete" hidden>Excluir grupo</button><button class="btn" id="group-save">Salvar</button></div>
+  </form></dialog>
+  <dialog class="modal" id="bsky-dlg"><form method="dialog" class="inner" id="bsky-form" novalidate>
+    <div class="modal-head"><h2 id="bsky-title">Conectar Bluesky</h2><button type="button" class="btn ghost small" id="bsky-close">Fechar</button></div>
+    <p class="help" style="margin:0">Crie uma senha de app no Bluesky (Configurações → Privacidade e segurança → Senhas de app) e cole aqui. Ela não é a senha da sua conta e pode ser apagada no Bluesky quando você quiser.</p>
+    <div class="field"><label for="bsky-handle">Usuário</label><input id="bsky-handle" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="loja.bsky.social"></div>
+    <div class="field"><label for="bsky-pass">Senha de app</label><input id="bsky-pass" type="password" autocomplete="new-password" placeholder="xxxx-xxxx-xxxx-xxxx"></div>
+    <div class="split"><span class="help" id="bsky-msg"></span><button class="btn" id="bsky-save">Conectar</button></div>
   </form></dialog>
 </main>
 <script type="module">
@@ -120,7 +137,28 @@
   // menu de redes
   const menu = $("#connect-menu");
   for (const b of menu.querySelectorAll("[data-p]")) { const pf = PLATFORMS[b.dataset.p]; b.innerHTML = `${platformIcon(b.dataset.p, 26)}<span>${esc(pf.label)}<small>${esc(pf.hint)}</small></span>`; }
-  for (const [id, p] of [["#h-ig", "instagram"], ["#h-fb", "facebook"], ["#h-tt", "tiktok"]]) $(id).innerHTML = `${platformIcon(p, 20)} ${esc(PLATFORMS[p].label)}`;
+  for (const [id, p] of [["#h-ig", "instagram"], ["#h-fb", "facebook"], ["#h-tt", "tiktok"], ["#h-yt", "youtube"], ["#h-th", "threads"], ["#h-li", "linkedin"], ["#h-tb", "tiktok_business"], ["#h-bs", "bluesky"]]) $(id).innerHTML = `${platformIcon(p, 20)} ${esc(PLATFORMS[p].label)}`;
+
+  // Bluesky não tem tela de login: pede o usuário e uma senha de app antes de gerar o link.
+  // A senha só passa pelo servidor a caminho do Post for Me; nada fica salvo no InstaFlow.
+  function pedirBluesky(accountId) {
+    return new Promise((resolve) => {
+      const dlg = $("#bsky-dlg"), acc = accountId ? accounts.find((x) => x.id === accountId) : null;
+      $("#bsky-title").textContent = acc ? `Reconectar ${handle(acc)}` : "Conectar Bluesky";
+      $("#bsky-handle").value = acc?.username || ""; $("#bsky-pass").value = ""; $("#bsky-msg").textContent = "";
+      const fechar = (v) => { $("#bsky-pass").value = ""; if (dlg.open) dlg.close(); resolve(v); };
+      $("#bsky-close").onclick = () => fechar(null);
+      dlg.oncancel = (e) => { e.preventDefault(); fechar(null); };
+      $("#bsky-form").onsubmit = (e) => {
+        e.preventDefault();
+        const usuario = $("#bsky-handle").value.trim().replace(/^@/, ""), senha = $("#bsky-pass").value.trim();
+        if (!usuario || !senha) { $("#bsky-msg").textContent = "Preencha o usuário e a senha de app."; return; }
+        fechar({ handle: usuario, app_password: senha });
+      };
+      dlg.showModal();
+      (acc ? $("#bsky-pass") : $("#bsky-handle")).focus();
+    });
+  }
   const openMenu = (on) => { menu.hidden = !on; $("#connect-scrim").hidden = !on; $("#connect").setAttribute("aria-expanded", String(on)); };
   $("#connect-scrim").addEventListener("click", () => openMenu(false));
   document.addEventListener("click", (e) => { if (!e.target.closest(".menu-wrap")) openMenu(false); });
@@ -130,9 +168,11 @@
   // accountId: reconectar ou liberar métricas de uma conta que já está aqui. A
   // autorização precisa levar a identificação dela, senão o serviço recusa.
   async function startConnect(platform = "instagram", reconnect = false, accountId = null) {
+    let bluesky = null;
+    if (platform === "bluesky") { bluesky = await pedirBluesky(accountId); if (!bluesky) return; }
     const b = $("#connect"); b.disabled = true;
     try {
-      const { url } = await api("/accounts/connect", { method: "POST", body: { platform, reconnect, ...(accountId ? { account_id: accountId } : {}) } });
+      const { url } = await api("/accounts/connect", { method: "POST", body: { platform, reconnect, ...(accountId ? { account_id: accountId } : {}), ...(bluesky ? { bluesky } : {}) } });
       const w = window.open(url, "instaflow_connect", "popup=yes,width=620,height=780");
       if (!w) { location.href = url; return; }
       popup = w;
@@ -202,7 +242,7 @@
         </span>
         <span class="acct-side">
           <span class="pill ${kind}">${esc(label)}</span>
-          ${a.status === "connected" && a.insights_ok === false ? `<button class="btn ghost small accent" data-liberar="${a.id}" title="Reconectar pedindo também as métricas (visualizações, alcance, compartilhamentos e salvos)">Liberar métricas</button>` : a.insights_ok ? `<span class="pill ok" title="Visualizações, alcance, compartilhamentos e salvos de cada post">métricas completas</span>` : ""}
+          ${a.status === "connected" && a.insights_ok === false && a.platform !== "bluesky" ? `<button class="btn ghost small accent" data-liberar="${a.id}" title="Reconectar pedindo também as métricas (visualizações, alcance, compartilhamentos e salvos)">Liberar métricas</button>` : a.insights_ok ? `<span class="pill ok" title="Visualizações, alcance, compartilhamentos e salvos de cada post">métricas completas</span>` : ""}
           <span class="inline"><button class="btn ghost small" data-label="${a.id}" title="Apelido" aria-label="Editar apelido">✎</button>${a.status !== "connected" ? `<button class="btn small" data-reconnect="${a.id}">Reconectar</button>` : `<button class="btn ghost small" data-disconnect="${a.id}">Desconectar</button>`}<button class="btn danger small" data-remove="${a.id}">Remover</button></span>
         </span>
       </div>`;

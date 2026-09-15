@@ -6,6 +6,7 @@ import type { PfmAccount, PfmPost, PfmResult } from "../_shared/pfm.ts";
 import { applyResult, refreshPostStatus } from "../_shared/resultados.ts";
 import { background, serviceClient, teamOf, timingSafeEqual } from "../_shared/util.ts";
 import { emit } from "../_shared/webhooks-time.ts";
+import { isSupported } from "../_shared/redes.ts";
 
 type Db = ReturnType<typeof serviceClient>;
 
@@ -86,7 +87,7 @@ async function onPost(db: Db, p: PfmPost) {
 }
 
 async function onAccount(db: Db, a: PfmAccount) {
-  if (!a?.id || !["instagram", "facebook", "tiktok"].includes(a.platform)) return;
+  if (!a?.id || !isSupported(a.platform)) return;
   // O time vem do external_id gerado no "Conectar Instagram"; uma conta que já
   // tem time continua nele (quem conectou primeiro fica com ela).
   const { data: existing } = await db.from("accounts").select("team_id").eq("id", a.id).maybeSingle();

@@ -327,7 +327,7 @@ dialog.modal::backdrop { background: rgba(8, 9, 12, .55); backdrop-filter: blur(
 .av-wrap .av { width: 100%; height: 100%; }
 .pf { position: absolute; right: -4px; bottom: -4px; display: inline-grid; place-items: center; border-radius: 50%; background: var(--pf); color: #fff; box-shadow: 0 0 0 2px var(--surface); }
 .pf svg { width: 68%; height: 68%; }
-.pf.pf-tiktok { background: #111; color: #fff; }
+.pf.pf-tiktok, .pf.pf-tiktok_business, .pf.pf-threads { background: #111; color: #fff; }
 .pf.inline { position: static; box-shadow: none; vertical-align: -2px; margin-right: 4px; }
 .menu-wrap { position: relative; }
 .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 240px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: 2px; }

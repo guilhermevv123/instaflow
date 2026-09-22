@@ -25,7 +25,7 @@ scripts/publish-site.sh  cria o repo público e ativa o GitHub Pages
 - `teams`, `team_members` (owner/admin/editor), `team_invites`. Contas, grupos, mídia e posts têm `team_id`; o RLS filtra por `my_team_ids()`.
 - Convites/remoção/renomear via RPC (`team_invite`, `team_remove_member`, `team_cancel_invite`, `team_rename`) — só admins do time. O dono não pode ser removido.
 - O painel manda `X-Team: <id>` para a função `api`; sem o cabeçalho, vale o primeiro time. Trocar de time: seletor no menu lateral (quando há mais de um).
-- Limites por time (`max_accounts` 20, `max_posts_month` 300, conta a conta) — a função `api` recusa acima disso. Ajuste no banco se precisar.
+- Limites por time (`max_accounts` sem limite por padrão, `max_posts_month` 2.500, conta a conta) — a função `api` recusa acima disso; o total de todos os times somados também não passa do plano (`app_settings.plan.posts_month`, hoje 2.500). Ajuste no banco se precisar.
 - Post for Me é um projeto só para todos os times: o link "Conectar Instagram" leva `external_id = ifteam_<team_id>_xxxx`, e é por isso que o webhook e o `sync` sabem de que time é cada conta.
 
 ## Redes
@@ -47,7 +47,7 @@ scripts/publish-site.sh  cria o repo público e ativa o GitHub Pages
 5. Falhou em 2 de 20? "Reenviar agora para as que falharam" cria um reenvio só para elas.
 6. **Desempenho** (menu lateral, com resumo no Início) → seguidores e ganhos por dia, visualizações, alcance, curtidas, comentários, compartilhamentos, salvos e tempo assistido de cada post e de cada conta; tabela por conta, melhores posts e todos os posts. A função `api` atualiza sozinha a cada 3 horas (pg_cron → `POST /metrics/cron`): seguidores, curtidas e comentários pela Graph API com a chave que o Post for Me guarda de cada conta; o resto pelo feed do Post for Me com `expand=metrics`, que só vem de contas conectadas com a permissão "feeds" (pedida desde 11/09; contas antigas usam **Liberar métricas** em Contas).
 
-Limites: Instagram aceita 100 posts por conta a cada 24 h via API; o plano do Post for Me (US$ 10) cobre 1.000 publicações/mês contadas **por conta** (20 contas × 1 post/dia ≈ 600).
+Limites: Instagram aceita 100 posts por conta a cada 24 h via API; o plano do Post for Me (US$ 25, Pro 2.5K) cobre 2.500 publicações/mês contadas **por conta** (50 contas × 1 post/dia ≈ 1.500).
 
 ## Ligar pela primeira vez
 

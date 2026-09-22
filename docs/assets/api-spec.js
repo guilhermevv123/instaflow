@@ -3,8 +3,8 @@
 // que a página gera para importar no Postman, Insomnia, n8n etc.
 // Textos em HTML simples; {BASE} vira o endereço da API na hora de mostrar.
 
-export const VERSION = "1.2.0";
-export const UPDATED = "14/09/2026";
+export const VERSION = "1.3.0";
+export const UPDATED = "22/09/2026";
 
 // ------------------------------------------------------------------ exemplos reutilizados
 const ID_POST = "6f1d2c8a-3b1e-4f7a-9d2c-8e5b4a1c0f37";
@@ -157,7 +157,7 @@ export const GROUPS = [
         title: "Conferir a chave",
         summary: "Diz qual chave está sendo usada, o time dela, se é só leitura, as contas liberadas e o limite por minuto.",
         desc: "<p>É a primeira chamada a fazer numa integração nova: se voltar <code>200</code>, a chave e o endereço estão certos.</p>",
-        response: { status: 200, body: { via: "api_key", key: { id: "5d1c0b9a-7e6f-4d3c-b2a1-908f7e6d5c4b", name: "n8n", prefix: "ifk_a1B2c3D4", scopes: [], read_only: false, account_ids: null, rate_limit: 120 }, team: { id: "c0ffee00-1234-4abc-9def-0123456789ab", name: "Loja Centro", accounts: 12, max_accounts: null, max_posts_month: 1000 } } },
+        response: { status: 200, body: { via: "api_key", key: { id: "5d1c0b9a-7e6f-4d3c-b2a1-908f7e6d5c4b", name: "n8n", prefix: "ifk_a1B2c3D4", scopes: [], read_only: false, account_ids: null, rate_limit: 120 }, team: { id: "c0ffee00-1234-4abc-9def-0123456789ab", name: "Loja Centro", accounts: 12, max_accounts: null, max_posts_month: 2500 } } },
         errors: [[401, "sem_autorizacao"], [401, "chave_invalida"], [401, "chave_revogada"], [429, "limite_chamadas"]],
       },
       {
@@ -165,14 +165,14 @@ export const GROUPS = [
         title: "Dados do time",
         summary: "Nome do time, contas conectadas, limite de contas e uso do mês (conta a conta).",
         desc: "<p><code>month_used</code> soma o que já foi publicado e o que está agendado para este mês, contando <b>cada conta</b> que recebe uma publicação (1 post em 10 contas = 10).</p>",
-        response: { status: 200, body: { id: "c0ffee00-1234-4abc-9def-0123456789ab", name: "Loja Centro", role: "api", accounts: 12, max_accounts: null, month_used: 184, max_posts_month: 1000 } },
+        response: { status: 200, body: { id: "c0ffee00-1234-4abc-9def-0123456789ab", name: "Loja Centro", role: "api", accounts: 12, max_accounts: null, month_used: 184, max_posts_month: 2500 } },
       },
       {
         id: "get-usage", method: "GET", path: "/usage", auth: "read",
         title: "Uso do mês e do plano",
         summary: "Quanto o time já usou no mês e quanto o plano inteiro (todos os times) já usou.",
         desc: "<p>O plano do Post for Me permite <b>1.000 publicações por mês, conta a conta, somando todos os times</b>. A API recusa uma publicação nova quando ela passaria do limite do time ou do plano (erro <code>400</code> com a conta explicada).</p>",
-        response: { status: 200, body: { team: { id: "c0ffee00-1234-4abc-9def-0123456789ab", name: "Loja Centro", role: "api", max_accounts: null }, month_published: 131, month_reserved: 184, month_limit: 1000, plan_used: 402, plan_limit: 1000, webhook: { id: "wbh_iXyhiF3oyitrTzFHPFeg", url: "{SUPABASE}/functions/v1/pfm-webhook", since: "2026-09-10T23:40:00.000Z" }, last_event: { received_at: "2026-09-14T14:59:31.000Z", event_type: "social.post.result.created" } } },
+        response: { status: 200, body: { team: { id: "c0ffee00-1234-4abc-9def-0123456789ab", name: "Loja Centro", role: "api", max_accounts: null }, month_published: 131, month_reserved: 184, month_limit: 2500, plan_used: 402, plan_limit: 2500, webhook: { id: "wbh_iXyhiF3oyitrTzFHPFeg", url: "{SUPABASE}/functions/v1/pfm-webhook", since: "2026-09-10T23:40:00.000Z" }, last_event: { received_at: "2026-09-14T14:59:31.000Z", event_type: "social.post.result.created" } } },
       },
       {
         id: "get-health", method: "GET", path: "/health", auth: "read",

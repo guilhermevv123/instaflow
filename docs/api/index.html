@@ -386,9 +386,9 @@ const resposta = await comRetentativa(() => fetch("{BASE}/posts", {
           <thead><tr><th>Limite</th><th>Valor</th><th>Quando passa</th></tr></thead>
           <tbody>
             <tr><td>Chamadas por minuto (por chave)</td><td>120 (ajustável de 10 a 600 ao criar a chave)</td><td><code>429 limite_chamadas</code></td></tr>
-            <tr><td>Publicações por mês, somando todos os times (plano)</td><td>1.000, conta a conta</td><td><code>400</code> com a conta explicada</td></tr>
-            <tr><td>Publicações por mês, por time</td><td>1.000, conta a conta</td><td><code>400</code></td></tr>
-            <tr><td>Contas por time</td><td>20</td><td><code>400</code> ao conectar</td></tr>
+            <tr><td>Publicações por mês, somando todos os times (plano)</td><td>2.500, conta a conta</td><td><code>400</code> com a conta explicada</td></tr>
+            <tr><td>Publicações por mês, por time</td><td>2.500, conta a conta</td><td><code>400</code></td></tr>
+            <tr><td>Contas por time</td><td>Sem limite por padrão (ajustável por time)</td><td><code>400</code> ao conectar, se o time tiver limite definido</td></tr>
             <tr><td>Instagram: posts pela API, por conta</td><td>100 a cada 24 horas (carrossel conta 1)</td><td>A rede recusa: a conta aparece como falha</td></tr>
             <tr><td>Instagram: mídias preparadas, por conta</td><td>400 a cada 24 horas</td><td>A rede recusa</td></tr>
             <tr><td>Facebook: Reels pela API, por Página</td><td>30 a cada 24 horas</td><td>A rede recusa</td></tr>
@@ -1028,6 +1028,11 @@ http_response_code(200);
       <section class="guia" id="mudancas" data-guia="Histórico de versões" data-grupo-nav="Avisos e integrações" data-busca="changelog versão mudanças novidades">
         <span class="eyebrow-api">Versões</span>
         <h2>Histórico de versões</h2>
+        <h3>1.3.0 · 22/09/2026</h3>
+        <ul>
+          <li>Plano do Post for Me passou de 1.000 para <b>2.500</b> publicações por mês (conta a conta, somando todos os times); cada time passa a poder usar até 2.500 também.</li>
+          <li>Contas por time: documentado como sem limite por padrão (já valia desde 15/09, a tabela de Limites é que estava desatualizada).</li>
+        </ul>
         <h3>1.2.0 · 15/09/2026</h3>
         <ul>
           <li>Redes novas: <b>YouTube</b>, <b>Threads</b>, <b>LinkedIn</b> (páginas de empresa), <b>TikTok Business</b> e <b>Bluesky</b>, para conectar, publicar e acompanhar o desempenho.</li>

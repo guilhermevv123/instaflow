@@ -138,7 +138,7 @@ export async function requireMember(req: Request): Promise<Caller> {
     teamName: team?.name ?? "Time",
     role: m.role as Caller["role"],
     maxAccounts: team?.max_accounts ?? null,
-    maxPostsMonth: team?.max_posts_month ?? 1000,
+    maxPostsMonth: team?.max_posts_month ?? 2500,
     via: "jwt",
   };
 }
@@ -167,7 +167,7 @@ async function requireApiKey(req: Request): Promise<Caller> {
     teamName: team.name ?? "Time",
     role: "api",
     maxAccounts: team.max_accounts ?? null,
-    maxPostsMonth: team.max_posts_month ?? 1000,
+    maxPostsMonth: team.max_posts_month ?? 2500,
     via: "key",
     apiKey,
   };

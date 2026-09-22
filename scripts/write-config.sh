@@ -25,7 +25,7 @@ cat > docs/assets/config.js <<EOF
 window.INSTAFLOW_CONFIG = {
   SUPABASE_URL: "https://${REF}.supabase.co",
   SUPABASE_ANON_KEY: "${ANON}",
-  PLAN_MONTHLY_LIMIT: 1000,
+  PLAN_MONTHLY_LIMIT: 2500,
 };
 EOF
 echo "✔ docs/assets/config.js escrito para https://${REF}.supabase.co"

@@ -383,7 +383,7 @@ async function planUsage(db: Db): Promise<{ used: number; limit: number }> {
     db.from("app_settings").select("value").eq("key", "plan").maybeSingle(),
   ]);
   if (error) throw new HttpError(500, error.message);
-  return { used: Number(used ?? 0), limit: Number((plan?.value as { posts_month?: number } | null)?.posts_month) || 1000 };
+  return { used: Number(used ?? 0), limit: Number((plan?.value as { posts_month?: number } | null)?.posts_month) || 2500 };
 }
 
 async function teamInfo(db: Db, caller: Caller) {

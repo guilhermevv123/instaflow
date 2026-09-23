@@ -19,9 +19,31 @@ function apiKey(): string {
   return key;
 }
 
+// O Post for Me aceita 5 chamadas por segundo por chave (a mesma chave para todos os
+// times). Com o cron de métricas, o /sync do painel e a API pública ao mesmo tempo,
+// passa disso: um 429 espera a janela virar e tenta de novo (até 4 tentativas).
+// 429 é recusa antes de processar, então repetir não duplica publicação.
+const TENTATIVAS = 4;
+export interface PfmDeps { fetch: typeof fetch; dormir: (ms: number) => Promise<void> }
+const depsPadrao: PfmDeps = { fetch: (i, o) => fetch(i, o), dormir: (ms) => new Promise((r) => setTimeout(r, ms)) };
+
+// Quanto esperar depois de um 429: Retry-After (segundos) ou X-Ratelimit-Reset (epoch em
+// segundos); sem cabeçalho, ~1 s crescendo a cada tentativa. Entre 250 ms e 3 s, com um
+// pouco de sorteio para as chamadas paradas não voltarem todas juntas.
+export function esperaDo429(h: Headers, tentativa: number, agora = Date.now()): number {
+  const ra = Number(h.get("retry-after"));
+  const reset = Number(h.get("x-ratelimit-reset"));
+  let ms = Number.isFinite(ra) && h.has("retry-after") ? ra * 1000
+    : Number.isFinite(reset) && reset > 0 ? reset * 1000 - agora
+    : 1000 * (tentativa + 1) + Math.random() * 250;
+  if (!h.has("retry-after") && Number.isFinite(reset) && reset > 0) ms += Math.random() * 100 * (tentativa + 1);
+  return Math.round(Math.min(3000, Math.max(250, ms)));
+}
+
 export async function pfm<T = unknown>(
   path: string,
   init: { method?: string; body?: unknown; query?: Record<string, string | string[] | undefined> } = {},
+  deps: PfmDeps = depsPadrao,
 ): Promise<T> {
   const url = new URL(BASE + path);
   for (const [k, v] of Object.entries(init.query ?? {})) {
@@ -29,15 +51,23 @@ export async function pfm<T = unknown>(
     if (Array.isArray(v)) v.forEach((x) => url.searchParams.append(k, x));
     else url.searchParams.set(k, v);
   }
-  const res = await fetch(url, {
-    method: init.method ?? "GET",
-    headers: {
-      Authorization: `Bearer ${apiKey()}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  });
+  let res: Response;
+  for (let tentativa = 0; ; tentativa++) {
+    res = await deps.fetch(url, {
+      method: init.method ?? "GET",
+      headers: {
+        Authorization: `Bearer ${apiKey()}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    });
+    if (res.status !== 429 || tentativa >= TENTATIVAS - 1) break;
+    await res.body?.cancel();
+    const ms = esperaDo429(res.headers, tentativa);
+    console.warn(`Post for Me: 429 em ${init.method ?? "GET"} ${path}; nova tentativa em ${ms} ms`);
+    await deps.dormir(ms);
+  }
   const text = await res.text();
   let data: unknown = null;
   try {

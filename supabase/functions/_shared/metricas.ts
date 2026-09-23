@@ -159,7 +159,7 @@ async function upsertEmPartes(db: Db, tabela: string, linhas: Record<string, unk
   }
 }
 
-export interface ResumoSync { team_id: string; contas: number; posts: number; completas: number; so_basico: number; erros: Array<{ conta: string; erro: string }>; em: string }
+export interface ResumoSync { team_id: string; contas: number; posts: number; completas: number; so_basico: number; erros: Array<{ conta: string; erro: string; status?: number }>; em: string }
 
 // Atualiza os números de um time. Erro numa conta não para as outras.
 export async function syncTeam(db: Db, teamId: string, deps: MetricasDeps = depsPadrao, pfmContas?: Map<string, PfmConta>): Promise<ResumoSync> {
@@ -243,7 +243,10 @@ export async function syncTeam(db: Db, teamId: string, deps: MetricasDeps = deps
       atualizacoes.push({ id: conta.id, campos: { ...perfil, insights_ok: itens.length ? completas > 0 : null, stats_synced_at: agora.toISOString() } });
       resumo.contas++;
     } catch (e) {
-      resumo.erros.push({ conta: nome, erro: (e as Error).message.slice(0, 200) });
+      // status e código do Post for Me no log: um "rate limit" pode vir sem ser 429 (limite da rede repassado)
+      const pe = e as { status?: number; body?: unknown };
+      console.error("métricas", conta.platform, conta.id, nome, pe.status ?? "", (e as Error).message, JSON.stringify(pe.body ?? null).slice(0, 400));
+      resumo.erros.push({ conta: nome, erro: (e as Error).message.slice(0, 200), ...(pe.status ? { status: pe.status } : {}) });
     }
   });
 

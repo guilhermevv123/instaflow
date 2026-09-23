@@ -124,17 +124,21 @@
     if (!data) throw new Error("Sem acesso aos números deste time.");
     return data;
   }
+  // cada troca de período invalida as respostas ainda a caminho (uma resposta velha não pinta por cima da nova)
+  let dashSeq = 0, perfSeq = 0;
   async function loadDash() {
+    const seq = ++dashSeq;
     document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = ".55"));
-    try { dash = await fetchDash(); paintAll(dash, { accounts }); }
-    catch (e) { toast(e.message, "error"); }
-    finally { document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = "")); }
+    try { const d = await fetchDash(); if (seq !== dashSeq) return; dash = d; paintAll(dash, { accounts }); }
+    catch (e) { if (seq === dashSeq) toast(e.message, "error"); }
+    finally { if (seq === dashSeq) document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = "")); }
   }
 
   // Desempenho das contas (seguidores, visualizações, engajamento) no mesmo período dos gráficos
   async function loadPerf() {
-    try { paintDesempenho($("#perf-kpis"), await carregarDesempenho(supa, team.id, days(), "", ate()), { link: "desempenho/" }); }
-    catch (e) { $("#perf-kpis").innerHTML = `<div class="ch-empty">Desempenho indisponível agora: ${esc(e.message)}</div>`; }
+    const seq = ++perfSeq;
+    try { const d = await carregarDesempenho(supa, team.id, days(), "", ate()); if (seq === perfSeq) paintDesempenho($("#perf-kpis"), d, { link: "desempenho/" }); }
+    catch (e) { if (seq === perfSeq) $("#perf-kpis").innerHTML = `<div class="ch-empty">Desempenho indisponível agora: ${esc(e.message)}</div>`; }
   }
 
   async function loadLists() {
@@ -181,9 +185,9 @@
   $("#export").addEventListener("click", () => { if (dash) exportCsv(dash); });
 
   try {
+    const seq = ++dashSeq;
     const [, d] = await Promise.all([loadLists(), fetchDash()]);
-    dash = d;
-    paintAll(dash, { accounts });
+    if (seq === dashSeq) { dash = d; paintAll(dash, { accounts }); }
   } catch (e) { toast(e.message, "error"); }
   loadPerf();
   pageReady();

@@ -60,15 +60,21 @@ export function paintKpis(el, data) {
       <div class="ln">Posts conta a conta (publicados + agendados)</div></a>`;
 }
 
+// Período "Hoje", "Ontem" (1 dia que terminou antes de hoje) ou "últimos N dias", com a preposição certa
+const isOntem = (data) => !!data.ate && data.ate !== data.today;
+const dosDias = (data) => (isOntem(data) ? "de ontem" : data.days === 1 ? "de hoje" : `dos últimos ${data.days} dias`);
+const nosDias = (data) => (isOntem(data) ? "ontem" : data.days === 1 ? "hoje" : `nos últimos ${data.days} dias`);
+
 export function paintRitmo(el, data) {
-  // histórico só com dias completos (hoje ainda está acontecendo); de hoje em diante, o agendado
-  const rows = data.daily || [], ti = rows.findIndex((r) => r.d === data.today);
+  // histórico só com dias completos (hoje ainda está acontecendo); de hoje em diante, o agendado.
+  // "Ontem": só o dia de ontem (a resposta traz também hoje e os próximos 7, que ficam de fora)
+  const rows = (data.daily || []).filter((r) => !isOntem(data) || r.d <= data.ate), ti = rows.findIndex((r) => r.d === data.today);
   const past = (i) => ti < 0 || i < ti;
   areaChart(el, {
     labels: rows.map((r) => r.d),
     marker: ti >= 0 ? ti : null,
     series: [
-      { name: "Publicadas", color: "--accent", type: "area", values: rows.map((r, i) => (past(i) ? r.published : null)) },
+      { name: "Publicadas", color: "--accent", type: "area", dots: rows.length <= 3, values: rows.map((r, i) => (past(i) ? r.published : null)) },
       { name: "Falhas", color: "--bad", dashed: true, dots: rows.length <= 40, values: rows.map((r, i) => (past(i) ? r.failed : null)) },
       { name: "Agendadas", color: "--time", dashed: true, values: rows.map((r, i) => (ti >= 0 && i >= ti ? r.scheduled : null)) },
     ],
@@ -91,11 +97,6 @@ export function paintFunil(el, badge, monthEl, data) {
     { label: "Com link do post", value: f.with_link || 0 },
   ] });
 }
-
-// Período "Hoje", "Ontem" (1 dia que terminou antes de hoje) ou "últimos N dias", com a preposição certa
-const isOntem = (data) => !!data.ate && data.ate !== data.today;
-const dosDias = (data) => (isOntem(data) ? "de ontem" : data.days === 1 ? "de hoje" : `dos últimos ${data.days} dias`);
-const nosDias = (data) => (isOntem(data) ? "ontem" : data.days === 1 ? "hoje" : `nos últimos ${data.days} dias`);
 
 export function paintDist(el, sub, data, tab) {
   if (tab === "tipo") {
@@ -137,7 +138,7 @@ export function paintTop(el, data, accounts) {
     const full = { ...a, ...(byId.get(a.id) || {}) };
     const [label, kind] = accountHealth(full);
     const name = a.label ? `${esc(a.label)} <span class="muted">${esc(handle(a))}</span>` : esc(handle(a));
-    const side = kind !== "ok" ? `<span class="pill ${kind}">${esc(label)}</span>` : a.platform === "instagram" ? `24 h: ${a.last24}/100` : "publicadas";
+    const side = kind !== "ok" ? `<span class="pill ${kind}">${esc(label)}</span>` : a.platform === "instagram" && !isOntem(data) ? `24 h: ${a.last24}/100` : "publicadas";
     return `<a class="top-row" href="desempenho/?conta=${encodeURIComponent(a.id)}" title="Ver o desempenho desta conta">${avatar(full, 34)}<span style="min-width:0"><div class="top-name">${name}</div><div class="top-bar"><i style="width:${Math.round((a.published / max) * 100)}%"></i></div></span><span class="top-num">${nf.format(a.published)}<small>${side}</small></span></a>`;
   }).join("");
 }
@@ -145,7 +146,7 @@ export function paintTop(el, data, accounts) {
 export function paintAll(data, { accounts = [] } = {}) {
   const $ = (s) => document.querySelector(s);
   paintKpis($("#kpis"), data);
-  $("#ritmo-sub").textContent = `Por dia, conta a conta · ${isOntem(data) ? "ontem, hoje" : data.days === 1 ? "hoje" : `últimos ${data.days} dias`} e o que já está agendado para os próximos 7`;
+  $("#ritmo-sub").textContent = isOntem(data) ? "Conta a conta · ontem" : `Por dia, conta a conta · ${data.days === 1 ? "hoje" : `últimos ${data.days} dias`} e o que já está agendado para os próximos 7`;
   paintRitmo($("#ch-ritmo"), data);
   paintFunil($("#ch-funil"), $("#funil-badge"), $("#funil-mes"), data);
   paintDist($("#ch-dist"), $("#dist-sub"), data, document.querySelector("#dist-tabs .on")?.dataset.t || "rede");

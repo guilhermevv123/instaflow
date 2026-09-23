@@ -127,11 +127,14 @@
     paintTodos($("#todos"), d, { conta, limite });
     $("#quando").textContent = d.atualizado ? `Atualizado ${fmt.relative(d.atualizado)} · sozinho a cada 3 horas` : "Ainda sem números: clique em Atualizar agora";
   }
+  // cada troca de período invalida as respostas ainda a caminho (uma resposta velha não pinta por cima da nova)
+  let seqCarga = 0;
   async function recarregar() {
+    const seq = ++seqCarga;
     document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = ".55"));
-    try { d = await carregar(supa, team.id, dias(), contaAlvo, periodo === "ontem" ? ontemBahia() : ""); pintar(); }
-    catch (e) { toast(e.message, "error"); }
-    finally { document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = "")); }
+    try { const x = await carregar(supa, team.id, dias(), contaAlvo, periodo === "ontem" ? ontemBahia() : ""); if (seq !== seqCarga) return; d = x; pintar(); }
+    catch (e) { if (seq === seqCarga) toast(e.message, "error"); }
+    finally { if (seq === seqCarga) document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = "")); }
   }
 
   $("#period").addEventListener("click", (e) => {

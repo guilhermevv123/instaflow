@@ -122,6 +122,14 @@ html.side-min .side-team { display: none; }
 .row.link:hover .title { color: var(--accent); }
 .acct-side { display: grid; gap: 8px; justify-items: end; }
 .acct-meta { display: flex; flex-wrap: wrap; align-items: center; row-gap: 4px; }
+.acct-style { margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 520px; }
+.ai-model-tools { flex-wrap: wrap; }
+.ai-model-tools .input { flex: 1 1 240px; width: auto; }
+.ai-model-list { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; }
+.ai-model { cursor: pointer; }
+.ai-model input { accent-color: var(--accent); }
+.ai-model .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-model.on .title { color: var(--accent); }
 .acct-meta > * + *::before { content: "·"; margin: 0 7px; color: var(--muted); }
 .empty { padding: 26px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; }
 

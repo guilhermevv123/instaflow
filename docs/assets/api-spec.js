@@ -3,8 +3,8 @@
 // que a página gera para importar no Postman, Insomnia, n8n etc.
 // Textos em HTML simples; {BASE} vira o endereço da API na hora de mostrar.
 
-export const VERSION = "1.3.0";
-export const UPDATED = "22/09/2026";
+export const VERSION = "1.4.0";
+export const UPDATED = "23/09/2026";
 
 // ------------------------------------------------------------------ exemplos reutilizados
 const ID_POST = "6f1d2c8a-3b1e-4f7a-9d2c-8e5b4a1c0f37";
@@ -499,9 +499,10 @@ export const GROUPS = [
           { name: "caption", type: "string", required: true, desc: "Legenda original (até 2.200 caracteres)." },
           { name: "count", type: "integer", required: true, desc: "Quantas versões (1 a 49). Para N contas, normalmente N − 1 (a primeira fica com a original)." },
           { name: "mode", type: "string", enum: ["auto", "ai", "local"], default: "auto", desc: "<code>auto</code> = IA do time se ligada, e o gerador automático completa o que faltar. <code>ai</code> = só IA (erro se não houver). <code>local</code> = só o gerador automático (grátis, instantâneo, variações mais leves)." },
+          { name: "styles", type: "array", desc: "Opcional. Um estilo de escrita para cada versão, na ordem (texto de até 300 caracteres ou <code>null</code> = mesmo tom da original), com exatamente <code>count</code> itens. Com <code>styles</code>, <code>variations[i]</code> é a versão do estilo <code>i</code> (e vem <code>null</code> se, com <code>mode: \"ai\"</code>, a IA não entregou uma versão que mude o texto)." },
         ],
         example: { body: { caption: LEGENDA, count: 3, mode: "auto" } },
-        desc: "<p>Veja como funciona e como ligar a IA em <a href=\"#variacoes\">Variações de legenda</a>. Para usar direto na publicação, mande <code>vary_captions: true</code> no POST /posts.</p>",
+        desc: "<p>Veja como funciona e como ligar a IA em <a href=\"#variacoes\">Variações de legenda</a>. Para usar direto na publicação, mande <code>vary_captions: true</code> no POST /posts: aí cada conta usa o estilo salvo nela (Contas → Estilo). Versão que só troca emoji, pontuação ou um detalhe do texto é descartada e a IA tenta de novo.</p>",
         response: { status: 200, body: { variations: ["Sexta de promoção: 20% off em tudo na loja! 🔥 É só hoje, corre.\n\n#sexta #ofertas", "Tudo com 20% off na loja nesta sexta! 🔥 Corre que é só hoje.\n\n#ofertas #sexta", "Só hoje: 20% off em toda a loja nesta sexta! 🔥 Não deixa para depois.\n\n#ofertas #sexta"], requested: 3, source: "ai", ai_count: 3, local_count: 0, weak: 0, provider: "gemini", provider_label: "Google Gemini", model: "gemini-2.5-flash", warning: null } },
         errors: [[400, "(sem code)"], [409, "sem_ia"], [429, "limite_ia"], [429, "ia_cota"], [502, "ia_rede · ia_modelo · ia_resposta"]],
       },

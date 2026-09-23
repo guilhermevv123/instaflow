@@ -39,6 +39,14 @@
       <div class="split"><h2>Variações de legenda com IA</h2><span id="ai-pill"><span class="sk sk-pill"></span></span></div>
       <p class="help">O botão <b>✨ Criar variações</b>, na tela Criar, faz uma legenda diferente para cada conta a partir da sua. Sem IA, ele troca expressões comuns, emojis e a ordem das hashtags. Com IA, cada conta ganha a legenda reescrita de verdade, com o mesmo sentido e os mesmos números, @menções e hashtags.</p>
       <div id="ai-state" class="stack"><span class="sk sk-line" style="width:55%"></span></div>
+      <div id="ai-models" class="stack" hidden>
+        <div class="split"><b>Escolher o modelo</b><span class="muted small" id="ai-model-count"></span></div>
+        <div class="inline ai-model-tools"><input id="ai-model-q" class="input" type="search" placeholder="Buscar (ex.: gemini, llama, gpt, claude)" aria-label="Buscar modelo" autocomplete="off" spellcheck="false"><label class="check small" id="ai-free-wrap" hidden><input type="checkbox" id="ai-free"> Só grátis</label></div>
+        <div class="list ai-model-list" id="ai-model-list" role="radiogroup" aria-label="Modelos"></div>
+        <div class="inline"><button class="btn small" type="button" id="ai-model-save" disabled>Testar e usar este modelo</button><button class="btn ghost small" type="button" id="ai-model-cancel">Cancelar</button></div>
+        <div id="ai-model-msg"></div>
+        <p class="help" id="ai-model-help"></p>
+      </div>
       <form id="ai-form" class="stack" novalidate hidden>
         <div class="field"><label for="ai-key">Chave da IA</label><input id="ai-key" class="input mono" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Cole aqui (AIza…, gsk_…, sk-…)"></div>
         <div class="inline"><button class="btn small" type="submit" id="ai-save">Salvar e testar</button><button class="btn ghost small" type="button" id="ai-cancel" hidden>Cancelar</button><a class="small" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Criar chave grátis no Google AI Studio →</a></div>
@@ -177,19 +185,74 @@
     $("#ai-pill").innerHTML = s.configured ? `<span class="pill ok">ligada</span>` : `<span class="pill neutral">desligada</span>`;
     $("#ai-state").innerHTML = s.configured
       ? `<div class="split"><span>Provedor</span><b>${esc(s.provider_label)}</b></div>
-         <div class="split"><span>Modelo</span><span class="muted small mono">${esc(s.model || "padrão")}</span></div>
+         <div class="split"><span>Modelo</span><span class="inline"><span class="muted small mono">${esc(s.model || "padrão")}</span>${s.can_edit ? `<button class="btn ghost small" type="button" id="ai-pick">Trocar modelo</button>` : ""}</span></div>
          <div class="split"><span>Chave</span><span class="muted small mono">${esc(s.key_hint)}</span></div>
          <div class="split"><span>Gerações nas últimas 24 h</span><span class="muted small">${s.calls_today} de ${s.limit_day}</span></div>
          ${s.can_edit ? `<div class="inline"><button class="btn ghost small" type="button" id="ai-change">Trocar chave</button><button class="btn danger small" type="button" id="ai-remove">Desligar IA</button></div>` : ""}`
       : `<p class="help">${s.can_edit ? "Cole uma chave abaixo para ligar. Sem ela, o botão continua funcionando com o gerador automático." : "Só o dono ou um admin do time liga a IA. Sem ela, o botão usa o gerador automático."}</p>`;
     $("#ai-form").hidden = !(s.can_edit && !s.configured);
     $("#ai-cancel").hidden = true;
+    if (!s.configured) $("#ai-models").hidden = true;
   }
+
+  // ---- escolher o modelo: lista da própria chave (OpenRouter mostra o preço de cada um)
+  let aiModels = null, aiModelSel = null;
+  const precoTxt = (m) => {
+    if (m.free) return `<span class="pill ok">grátis</span>`;
+    if (m.price_in == null) return "";
+    const n = (x) => (x < 0.01 ? x.toFixed(3) : x < 10 ? x.toFixed(2) : x.toFixed(0)).replace(".", ",");
+    return `<span class="pill neutral" title="Dólares por 1 milhão de tokens: entrada / saída">US$ ${n(m.price_in)} / ${n(m.price_out ?? 0)}</span>`;
+  };
+  function paintModels() {
+    const q = $("#ai-model-q").value.trim().toLowerCase();
+    const soGratis = $("#ai-free").checked;
+    const todos = aiModels.models.filter((m) => (!soGratis || m.free) && (!q || `${m.name} ${m.id}`.toLowerCase().includes(q)));
+    const lista = todos.slice(0, 150);
+    $("#ai-model-count").textContent = `${todos.length} de ${aiModels.models.length} modelos`;
+    $("#ai-model-list").innerHTML = lista.length ? lista.map((m) => `
+      <label class="row ai-model${m.id === aiModelSel ? " on" : ""}">
+        <input type="radio" name="ai-model" value="${esc(m.id)}" ${m.id === aiModelSel ? "checked" : ""}>
+        <span><div class="title">${esc(m.name)}${m.id === aiModels.current ? ` <span class="pill acc">atual</span>` : ""}${aiModels.suggested.includes(m.id) ? ` <span class="pill time">recomendado</span>` : ""}</div><div class="sub mono">${esc(m.id)}${m.context ? ` · ${Math.round(m.context / 1000).toLocaleString("pt-BR")} mil tokens` : ""}</div></span>
+        ${precoTxt(m)}
+      </label>`).join("") + (todos.length > lista.length ? `<p class="help">Mostrando 150. Busque pelo nome para achar os outros.</p>` : "")
+      : `<div class="empty small">Nenhum modelo com “${esc(q)}”.</div>`;
+    $("#ai-model-save").disabled = !aiModelSel || aiModelSel === aiModels.current;
+  }
+  async function openModels() {
+    const box = $("#ai-models"); box.hidden = false; $("#ai-model-msg").innerHTML = "";
+    $("#ai-model-list").innerHTML = `<span class="sk" style="display:block;height:160px"></span>`;
+    try {
+      aiModels = await api("/ai/models");
+      aiModelSel = aiModels.current;
+      const or = aiModels.provider === "openrouter";
+      $("#ai-free-wrap").hidden = !or;
+      $("#ai-model-help").innerHTML = or
+        ? "Preço em dólares por 1 milhão de tokens (entrada / saída). Uma rodada de variações para 10 contas gasta uns poucos milhares de tokens. Modelos grátis do OpenRouter têm limite de uso por minuto e por dia."
+        : `Modelos que a sua chave de ${esc(aiModels.provider_label)} enxerga. Os marcados como recomendado são os testados com o InstaFlow.`;
+      paintModels();
+      $("#ai-model-q").focus();
+    } catch (e) { $("#ai-model-list").innerHTML = `<div class="error-box">${esc(e.message)}</div>`; }
+  }
+  $("#ai-model-q").addEventListener("input", () => aiModels && paintModels());
+  $("#ai-free").addEventListener("change", () => aiModels && paintModels());
+  $("#ai-model-list").addEventListener("change", (e) => { if (e.target.name !== "ai-model") return; aiModelSel = e.target.value; $("#ai-model-list").querySelectorAll(".ai-model").forEach((r) => r.classList.toggle("on", r.querySelector("input").checked)); $("#ai-model-save").disabled = aiModelSel === aiModels.current; });
+  $("#ai-model-cancel").addEventListener("click", () => { $("#ai-models").hidden = true; });
+  $("#ai-model-save").addEventListener("click", async () => {
+    const btn = $("#ai-model-save"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Testando o modelo…`; $("#ai-model-msg").innerHTML = "";
+    try {
+      const s = await api("/ai/model", { method: "PUT", body: { model: aiModelSel } });
+      paintIa(s); $("#ai-models").hidden = true;
+      toast(`Modelo trocado · ${s.model}.`, "ok");
+      if (s.warning) $("#ai-state").insertAdjacentHTML("beforeend", `<div class="warn-box">${esc(s.warning)}</div>`);
+    } catch (err) { $("#ai-model-msg").innerHTML = `<div class="error-box">${esc(err.message)}</div>`; btn.disabled = false; }
+    finally { btn.textContent = "Testar e usar este modelo"; }
+  });
   async function loadIa() {
     try { paintIa(await api("/ai")); }
     catch (e) { $("#ai-pill").innerHTML = ""; $("#ai-state").innerHTML = e.status === 404 ? `<p class="help">A IA ainda não está disponível neste servidor.</p>` : `<div class="error-box">${esc(e.message)}</div>`; }
   }
   $("#ai-state").addEventListener("click", async (e) => {
+    if (e.target.closest("#ai-pick")) { openModels(); return; }
     if (e.target.closest("#ai-change")) { $("#ai-form").hidden = false; $("#ai-cancel").hidden = false; $("#ai-key").focus(); return; }
     if (!e.target.closest("#ai-remove")) return;
     if (!(await confirmDialog("Desligar a IA deste time? O botão de variações volta a usar o gerador automático.", { okLabel: "Desligar", danger: true }))) return;
@@ -204,7 +267,7 @@
       const s = await api("/ai", { method: "PUT", body: { key } });
       $("#ai-key").value = "";
       paintIa(s);
-      toast(`IA ligada · ${s.provider_label}.`, "ok");
+      toast(`IA ligada · ${s.provider_label}. Se quiser, troque o modelo.`, "ok");
       if (s.warning) $("#ai-state").insertAdjacentHTML("beforeend", `<div class="warn-box">${esc(s.warning)}</div>`);
     } catch (err) { $("#ai-msg").innerHTML = `<div class="error-box">${esc(err.message)}</div>`; }
     finally { btn.disabled = false; btn.textContent = "Salvar e testar"; }

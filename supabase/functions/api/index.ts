@@ -22,7 +22,9 @@
 //   GET    /ai                        IA do time para variar legendas (estado, nunca a chave)
 //   PUT    /ai                        liga/troca a chave de IA do time (dono/admin; testa antes de salvar)
 //   DELETE /ai                        desliga a IA do time (dono/admin)
-//   POST   /captions/vary             N variações da legenda com a IA do time
+//   GET    /ai/models                 modelos de texto que a chave do time enxerga (com preço no OpenRouter)
+//   PUT    /ai/model                  troca o modelo do time (dono/admin; testa antes de salvar)
+//   POST   /captions/vary             N variações da legenda com a IA do time (styles: um estilo por conta)
 //   POST   /metrics/sync              atualiza agora seguidores e métricas dos posts do time
 //   POST   /metrics/cron              o mesmo para todos os times (pg_cron, com segredo; sem login)
 //
@@ -38,7 +40,7 @@
 // Cada chamada com chave devolve X-RateLimit-* e fica registrada em api_requests.
 
 import * as pub from "../_shared/api-publica.ts";
-import { aiRemove, aiSave, aiStatus, generateVariations, varyCaptions, VARY_MODES, type VaryMode } from "../_shared/ia-rotas.ts";
+import { aiModels, aiRemove, aiSave, aiSetModel, aiStatus, generateVariations, varyCaptions, VARY_MODES, type VaryMode } from "../_shared/ia-rotas.ts";
 import { metricsCron, syncTeamManual } from "../_shared/metricas.ts";
 import { listData, pfm, PfmError, pfmListAll, type PfmAccount, type PfmPost, type PfmResult, type PfmWebhook } from "../_shared/pfm.ts";
 import { applyResult } from "../_shared/resultados.ts";
@@ -149,9 +151,12 @@ async function normalizeInput(db: Db, caller: Caller, input: PostInput): Promise
     // a primeira conta fica com a legenda original; as outras sem legenda própria ganham uma versão
     const need = input.account_ids.slice(1).filter((id) => !overrides[id]?.trim());
     if (need.length) {
-      const r = await generateVariations(db, caller, input.caption.trim(), need.length, vary === true ? "auto" : vary);
-      need.forEach((id, i) => { if (r.variations[i]) overrides[id] = r.variations[i]; });
-      input._variations = { source: r.source, generated: r.variations.length, ai_count: r.ai_count, local_count: r.local_count, weak: r.weak, provider: r.provider_label, warning: r.warning };
+      // o jeito de escrever de cada conta (Contas → Estilo), se tiver
+      const { data: est } = await db.from("accounts").select("id, caption_style").eq("team_id", caller.teamId).in("id", need);
+      const estilo = new Map((est ?? []).map((a: { id: string; caption_style: string | null }) => [a.id, a.caption_style]));
+      const r = await generateVariations(db, caller, input.caption.trim(), need.length, vary === true ? "auto" : vary, undefined, need.map((id) => estilo.get(id) ?? null));
+      need.forEach((id, i) => { if (r.variations[i]) overrides[id] = r.variations[i]!; });
+      input._variations = { source: r.source, generated: r.variations.filter(Boolean).length, ai_count: r.ai_count, local_count: r.local_count, weak: r.weak, provider: r.provider_label, warning: r.warning };
     }
     input.caption_overrides = overrides;
   }
@@ -351,6 +356,8 @@ async function route(req: Request, db: Db, caller: Caller, path: string, seg: st
   if (is("GET", "ai")) return json(req, await aiStatus(db, caller));
   if (is("PUT", "ai")) return json(req, await aiSave(db, caller, await readJson<{ key?: string }>(req)));
   if (is("DELETE", "ai")) return json(req, await aiRemove(db, caller));
+  if (is("GET", "ai", "models")) return json(req, await aiModels(db, caller));
+  if (is("PUT", "ai", "model")) return json(req, await aiSetModel(db, caller, await readJson<{ model?: string }>(req)));
   if (is("POST", "captions", "vary")) return json(req, await varyCaptions(db, caller, await readJson<{ caption?: string; count?: number }>(req)));
   // desempenho
   if (is("GET", "metrics", "accounts")) return json(req, await pub.metricsAccounts(db, caller));

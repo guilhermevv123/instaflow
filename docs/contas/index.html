@@ -258,12 +258,13 @@
         <span>
           <div class="title">${a.label ? `${esc(a.label)} <span class="muted">· </span>` : ""}${esc(handle(a))} <span class="muted small">· ${esc(platformName(a.platform))}</span></div>
           <div class="sub acct-meta"><span class="inline">${gs || '<span class="muted">sem grupo</span>'}</span><span>${used} publicações nas 24 h</span>${a.followers != null ? `<span>${Number(a.followers).toLocaleString("pt-BR")} seguidores</span>` : ""}${d !== null ? `<span title="Renovação automática da chave">chave até ${fmt.date(a.access_token_expires_at)}</span>` : ""}</div>
+          ${a.caption_style ? `<div class="sub acct-style" title="Estilo das legendas desta conta (usado pela IA ao criar variações)">✍ ${esc(a.caption_style)}</div>` : ""}
           <div class="bar ${used >= 90 ? "bad" : used >= 60 ? "warn" : ""}" style="max-width:220px;margin-top:6px"><i style="width:${Math.min(100, used)}%"></i></div>
         </span>
         <span class="acct-side">
           <span class="pill ${kind}">${esc(label)}</span>
           ${a.status === "connected" && a.insights_ok === false && a.platform !== "bluesky" ? `<button class="btn ghost small accent" data-liberar="${a.id}" title="Reconectar pedindo também as métricas (visualizações, alcance, compartilhamentos e salvos)">Liberar métricas</button>` : a.insights_ok ? `<span class="pill ok" title="Visualizações, alcance, compartilhamentos e salvos de cada post">métricas completas</span>` : ""}${a.status === "connected" && a.platform === "tiktok" && a.followers == null ? `<button class="btn ghost small accent" data-seguidores="${a.id}" title="Reconectar pedindo também o número de seguidores">Liberar seguidores</button>` : ""}
-          <span class="inline"><a class="btn ghost small" href="../desempenho/?conta=${encodeURIComponent(a.id)}" title="Todos os posts e o desempenho desta conta">Desempenho</a><button class="btn ghost small" data-label="${a.id}" title="Apelido" aria-label="Editar apelido">✎</button>${a.status !== "connected" ? `<button class="btn small" data-reconnect="${a.id}">Reconectar</button>` : `<button class="btn ghost small" data-disconnect="${a.id}">Desconectar</button>`}<button class="btn danger small" data-remove="${a.id}">Remover</button></span>
+          <span class="inline"><a class="btn ghost small" href="../desempenho/?conta=${encodeURIComponent(a.id)}" title="Todos os posts e o desempenho desta conta">Desempenho</a><button class="btn ghost small" data-label="${a.id}" title="Apelido" aria-label="Editar apelido">✎</button><button class="btn ghost small" data-estilo="${a.id}" title="Jeito de escrever desta conta: a IA usa ao criar variações da legenda">Estilo</button>${a.status !== "connected" ? `<button class="btn small" data-reconnect="${a.id}">Reconectar</button>` : `<button class="btn ghost small" data-disconnect="${a.id}">Desconectar</button>`}<button class="btn danger small" data-remove="${a.id}">Remover</button></span>
         </span>
       </div>`;
     }).join("") : accounts.length ? `<div class="empty">Nenhuma conta com “${esc(busca.value.trim())}”. Apague a busca (Esc) para ver todas.</div>` : `<div class="empty">Nenhuma conta ainda. Clique em <b>+ Conectar</b> e escolha a rede.</div>`;
@@ -278,6 +279,12 @@
         const v = await promptDialog(`Apelido para ${handle(a)} (deixe vazio para remover)`, a.label || "", { placeholder: "Ex.: Loja Centro", maxlength: 40 });
         if (v === null) return;
         const { error } = await supa.from("accounts").update({ label: v.trim() || null }).eq("id", a.id); if (error) throw error;
+      } else if (t.dataset.estilo) {
+        const a = accounts.find((x) => x.id === t.dataset.estilo);
+        const v = await promptDialog(`Estilo das legendas de ${handle(a)}: como esta conta escreve (tom, público, gírias). A IA usa ao criar variações. Deixe vazio para seguir a legenda principal.`, a.caption_style || "", { placeholder: "Ex.: descontraído, fala com mães de 25 a 40 anos, usa gírias baianas", maxlength: 300 });
+        if (v === null) return;
+        const { error } = await supa.from("accounts").update({ caption_style: v.replace(/\s+/g, " ").trim() || null }).eq("id", a.id); if (error) throw error;
+        toast(v.trim() ? "Estilo salvo." : "Estilo removido.", "ok");
       } else if (t.dataset.seguidores) {
         const a = accounts.find((x) => x.id === t.dataset.seguidores);
         if (!(await confirmDialog(`Liberar os seguidores de ${handle(a)}? Vai abrir a autorização do TikTok de novo, agora pedindo também o número de seguidores. Antes de continuar, entre no tiktok.com com ${handle(a)} neste navegador (a autorização usa a conta que estiver aberta). A conta continua a mesma e nada agendado se perde.`, { okLabel: "Abrir autorização" }))) return;

@@ -350,7 +350,7 @@
     if (!$("#vary").checked || n < 2) { el.hidden = true; el.innerHTML = ""; return; }
     const partes = [];
     if (inf) {
-      const quem = inf.fonte === "ia" ? `reescritas pela IA (${esc(inf.provider)})${inf.completadas ? ` · ${inf.completadas} pelo gerador automático` : ""}` : "feitas pelo gerador automático, sem IA";
+      const quem = inf.fonte === "ia" ? `reescritas pela IA (${esc(inf.provider)}${inf.modelo ? ` · ${esc(inf.modelo)}` : ""})${inf.comEstilo ? ", no estilo de cada conta" : ""}${inf.completadas ? ` · ${inf.completadas} pelo gerador automático` : ""}` : "feitas pelo gerador automático, sem IA";
       partes.push(`<div class="vary-note ${inf.fonte}"><span>✨ ${n} legendas, uma por conta · ${quem}</span><span class="inline"><button type="button" class="btn ghost small" data-vary="again">Gerar de novo</button><button type="button" class="btn ghost small" data-vary="same">Usar a mesma para todas</button></span></div>`);
       if (normCap(cap.value) !== normCap(inf.base)) partes.push(`<div class="warn-box">A legenda principal mudou depois das variações. <button type="button" class="linkbtn" data-vary="again">Gerar de novo a partir dela</button></div>`);
       if (inf.fracas) partes.push(`<div class="warn-box">${inf.fracas} ${inf.fracas === 1 ? "variação só ganhou" : "variações só ganharam"} um emoji: a legenda tem pouca coisa que o gerador automático sabe trocar. Edite essas contas ou <a href="../config/#ia">ligue a IA grátis</a> para reescritas de verdade.</div>`);
@@ -374,27 +374,33 @@
     if (!base) { toast("Escreva a legenda primeiro: as variações saem dela.", "info"); cap.focus(); return; }
     const precisa = ids.length - 1;
     genBtn.dataset.busy = "1"; genBtn.disabled = true; genBtn.innerHTML = `<span class="spinner"></span> Criando ${ids.length} legendas…`;
-    let variacoes = [], fonte = "local", provider = null, completadas = 0, fracas = 0, aviso = null;
+    // o jeito de escrever de cada conta (Contas → Estilo); a resposta vem na mesma ordem
+    const estilos = ids.slice(1).map((id) => accById.get(id)?.caption_style || null);
+    const comEstilo = estilos.some(Boolean);
+    let variacoes = Array(precisa).fill(null), fonte = "local", provider = null, modelo = null, completadas = 0, fracas = 0, aviso = null;
     try {
-      const r = await api("/captions/vary", { method: "POST", body: { caption: base, count: precisa, mode: "ai" } });
-      variacoes = (r.variations || []).filter((v) => typeof v === "string" && v.trim());
-      if (variacoes.length) { fonte = "ia"; provider = r.provider_label || r.provider; }
+      const r = await api("/captions/vary", { method: "POST", body: { caption: base, count: precisa, mode: "ai", ...(comEstilo ? { styles: estilos } : {}) } });
+      (r.variations || []).slice(0, precisa).forEach((v, i) => { if (typeof v === "string" && v.trim()) variacoes[i] = v; });
+      if (variacoes.some(Boolean)) { fonte = "ia"; provider = r.provider_label || r.provider; modelo = r.model; }
+      if (r.warning) aviso = r.warning;
     } catch (err) {
       if (err.code !== "sem_ia" && err.status !== 404) aviso = err.message;
     }
-    if (variacoes.length < precisa) {
-      const r = variarLegenda(base, precisa - variacoes.length, { seed: Date.now() & 0x7fffffff, evitar: variacoes });
+    const faltam = variacoes.map((v, i) => (v ? -1 : i)).filter((i) => i >= 0);
+    if (faltam.length) {
+      const r = variarLegenda(base, faltam.length, { seed: Date.now() & 0x7fffffff, evitar: variacoes.filter(Boolean) });
       if (fonte === "ia") completadas = r.variacoes.length;
       fracas = r.fracas;
-      variacoes = [...variacoes, ...r.variacoes];
+      r.variacoes.forEach((v, k) => { variacoes[faltam[k]] = v; });
     }
     state.overrides = { [ids[0]]: base };
     ids.slice(1).forEach((id, i) => { state.overrides[id] = variacoes[i] ?? base; });
-    state.varyInfo = { base, fonte, provider, completadas, fracas };
+    state.varyInfo = { base, fonte, provider, modelo, completadas, fracas, comEstilo: comEstilo && fonte === "ia" };
     $("#vary").checked = true; $("#overrides").hidden = false;
     delete genBtn.dataset.busy;
     renderOverrides(true); renderPreview();
-    if (aviso) toast(`A IA não respondeu agora: ${aviso} Usei o gerador automático.`, "info", 7000);
+    if (aviso && fonte === "ia") toast(aviso, "info", 7000);
+    else if (aviso) toast(`A IA não respondeu agora: ${aviso} Usei o gerador automático.`, "info", 7000);
     else toast(`${ids.length} legendas prontas, uma por conta. Confira e ajuste se quiser.`, "ok");
   }
 

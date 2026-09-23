@@ -1028,6 +1028,13 @@ http_response_code(200);
       <section class="guia" id="mudancas" data-guia="Histórico de versões" data-grupo-nav="Avisos e integrações" data-busca="changelog versão mudanças novidades">
         <span class="eyebrow-api">Versões</span>
         <h2>Histórico de versões</h2>
+        <h3>1.4.0 · 23/09/2026</h3>
+        <ul>
+          <li><a href="#vary-captions"><code>POST /captions/vary</code></a> aceita <code>styles</code>: um estilo de escrita por versão (tom, público, gírias). Com ele, a resposta mantém a posição de cada versão.</li>
+          <li><code>vary_captions</code> no <code>POST /posts</code> usa o estilo salvo em cada conta (painel: Contas → Estilo).</li>
+          <li>Variações da IA precisam mudar o texto: versão que só troca emoji, pontuação ou um detalhe numa legenda longa é descartada, e a IA tenta de novo uma vez para as que faltaram.</li>
+          <li>O modelo da IA agora é escolhido pelo dono ou admin em Config (com a lista de modelos da chave e, no OpenRouter, o preço de cada um) e não muda sozinho.</li>
+        </ul>
         <h3>1.3.0 · 22/09/2026</h3>
         <ul>
           <li>Plano do Post for Me passou de 1.000 para <b>2.500</b> publicações por mês (conta a conta, somando todos os times); cada time passa a poder usar até 2.500 também.</li>

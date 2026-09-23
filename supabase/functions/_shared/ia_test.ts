@@ -1,6 +1,6 @@
 // deno test supabase/functions/_shared/ia_test.ts --allow-net
 import assert from "node:assert/strict";
-import { chat, chatWithFallback, classify, detectProvider, IaError, keyHint, maxTokensFor, parseVariacoes, promptVariacoes, tokens, validarVariacoes } from "./ia.ts";
+import { chat, chatWithFallback, classify, conferirVariacoes, detectProvider, IaError, keyHint, listModels, maxTokensFor, PARECENCA_MAX, parecenca, parseVariacoes, promptVariacoes, tokens, validarVariacoes } from "./ia.ts";
 
 Deno.test("provedor pelo prefixo da chave (e dica sem mostrar a chave)", () => {
   assert.equal(detectProvider("AIzaSyA1234567890abcdefghijklmnopqrstu"), "gemini");
@@ -118,4 +118,37 @@ Deno.test("chama o provedor no formato certo e troca de modelo quando precisa (s
   } finally {
     await srv.shutdown();
   }
+});
+
+Deno.test("texto precisa mudar: só emoji ou um retoque numa legenda longa não vale; reescrever a ordem vale", () => {
+  const orig = "Hoje tem show do Big Lobo na praça central, venha curtir com a gente e traga a família toda! 🎶 #Bahia";
+  const out = conferirVariacoes(orig, [
+    "Hoje tem show do Big Lobo na praça central, venha curtir com a gente e traga a família toda! 🎉 #Bahia", // só emoji
+    "Hoje tem show do Big Lobo na praça central, venha curtir com a gente e traga a família toda!! 🎶🎶 #Bahia", // pontuação e emoji
+    "Traga a família toda e venha curtir com a gente: hoje tem show do Big Lobo na praça central! 🎶 #Bahia", // ordem nova
+    "Show do Big Lobo hoje, na praça central! Chama a família e vem curtir com a gente 🎶 #Bahia", // reescrita
+  ]);
+  assert.equal(out[0], null); assert.equal(out[1], null);
+  assert.ok(out[2]?.startsWith("Traga a família")); assert.ok(out[3]?.startsWith("Show do Big Lobo"));
+  assert.ok(parecenca(orig, orig) === 1 && parecenca(orig, out[3]!) < PARECENCA_MAX);
+  // legenda longa com uma palavra retocada: praticamente o mesmo texto
+  const longa = "Hoje tem show do Big Lobo na praça central, venha curtir com a gente e traga a família toda. Vai ter comida boa, música ao vivo e muita alegria para todo mundo até tarde da noite! #Bahia";
+  assert.deepEqual(conferirVariacoes(longa, [longa.replace("venha", "venham"), longa.replace("Hoje tem", "Hoje vai ter")]), [null, null]);
+});
+
+Deno.test("catálogo de modelos: OpenRouter só texto, com preço por 1M e grátis; OpenAI sem embeddings/áudio/imagem", async () => {
+  const fake = (body: unknown, status = 200) => (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+  const or = await listModels("openrouter", "sk-or-x", { fetchImpl: fake({ data: [
+    { id: "openai/gpt-4.1-mini", name: "OpenAI: GPT-4.1 Mini", context_length: 1047576, architecture: { input_modalities: ["text", "image"], output_modalities: ["text"] }, pricing: { prompt: "0.0000004", completion: "0.0000016" } },
+    { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Meta: Llama 3.3 70B (free)", architecture: { output_modalities: ["text"] }, pricing: { prompt: "0", completion: "0" } },
+    { id: "google/gemini-2.5-flash-image", name: "Nano Banana", architecture: { output_modalities: ["image", "text"] }, pricing: { prompt: "0.0000003", completion: "0.0000025" } },
+    { id: "openrouter/auto", name: "Auto Router", architecture: { output_modalities: ["text"] }, pricing: { prompt: "-1", completion: "-1" } },
+  ] }) });
+  assert.deepEqual(or.map((m) => m.id), ["meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-4.1-mini"]);
+  assert.equal(or[0].free, true); assert.equal(or[1].free, false); assert.equal(or[1].price_in, 0.4); assert.equal(or[1].price_out, 1.6); assert.equal(or[1].context, 1047576);
+  const oa = await listModels("openai", "sk-x", { fetchImpl: fake({ data: [{ id: "gpt-4.1-mini" }, { id: "text-embedding-3-small" }, { id: "whisper-1" }, { id: "gpt-image-1" }, { id: "o4-mini" }, { id: "tts-1" }] }) });
+  assert.deepEqual(oa.map((m) => m.id), ["gpt-4.1-mini", "o4-mini"]);
+  const ge = await listModels("gemini", "AIza-x", { fetchImpl: fake({ data: [{ id: "models/gemini-2.5-flash" }, { id: "models/text-embedding-004" }, { id: "models/gemini-2.5-flash-preview-tts" }] }) });
+  assert.deepEqual(ge.map((m) => m.id), ["gemini-2.5-flash"]);
+  await assert.rejects(listModels("openrouter", "sk-or-x", { fetchImpl: fake({ error: { message: "Invalid API key" } }, 401) }), (e) => e instanceof IaError && e.kind === "chave");
 });

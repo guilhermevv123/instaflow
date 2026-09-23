@@ -4,6 +4,8 @@ import { chat, chatWithFallback, classify, conferirVariacoes, detectProvider, Ia
 
 Deno.test("provedor pelo prefixo da chave (e dica sem mostrar a chave)", () => {
   assert.equal(detectProvider("AIzaSyA1234567890abcdefghijklmnopqrstu"), "gemini");
+  assert.equal(detectProvider("AQ.Ab8RN6aaaaBBBBccccDDDDeeeeFFFFgggg1234"), "gemini", "formato novo do Google");
+  assert.equal(detectProvider("AQ.curta"), null);
   assert.equal(detectProvider(" gsk_abcdefghijklmnopqrstuvwxyz0123 "), "groq");
   assert.equal(detectProvider("sk-or-v1-abcdefghijklmnopqrstuvwxyz0123"), "openrouter");
   assert.equal(detectProvider("sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123"), "anthropic");

@@ -2,7 +2,7 @@
 //
 // A chave é do TIME (tela Config; só dono/admin grava) e fica numa tabela que
 // só o service_role lê — nunca volta para o navegador. O provedor sai do
-// prefixo da chave: Google Gemini (AIza…, tem plano grátis), Groq (gsk_…,
+// prefixo da chave: Google Gemini (AIza… ou AQ.…, tem plano grátis), Groq (gsk_…,
 // grátis), OpenRouter (sk-or-…), Anthropic (sk-ant-…) e OpenAI (sk-…).
 // Todos menos a Anthropic falam o formato de chat da OpenAI.
 //
@@ -27,6 +27,7 @@ export const isGithubToken = (key: string) => /^(gh[pousr]_|github_pat_)/.test(k
 export function detectProvider(key: string): Provider | null {
   const k = key.trim();
   if (/^AIza[0-9A-Za-z_-]{20,}$/.test(k)) return "gemini";
+  if (/^AQ\.[0-9A-Za-z_-]{20,}$/.test(k)) return "gemini"; // formato novo do Google AI Studio (2026)
   if (/^gsk_[0-9A-Za-z]{20,}$/.test(k)) return "groq";
   if (/^sk-or-[0-9A-Za-z_-]{20,}$/.test(k)) return "openrouter";
   if (/^sk-ant-[0-9A-Za-z_-]{20,}$/.test(k)) return "anthropic";

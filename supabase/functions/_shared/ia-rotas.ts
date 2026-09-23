@@ -49,9 +49,9 @@ export async function aiSave(db: Db, caller: Caller, body: { key?: string }, cha
   const key = String(body.key ?? "").trim();
   if (!key) throw new HttpError(400, "Cole a chave da IA.");
   if (key.length > 300 || /\s/.test(key)) throw new HttpError(400, "Essa chave parece incompleta ou com espaço no meio. Copie de novo.");
-  if (isGithubToken(key)) throw new HttpError(400, "Essa é uma chave do GitHub, e o GitHub não gera texto (o GitHub Models foi desativado). Crie uma chave grátis no Google AI Studio (começa com AIza) e cole aqui.");
+  if (isGithubToken(key)) throw new HttpError(400, "Essa é uma chave do GitHub, e o GitHub não gera texto (o GitHub Models foi desativado). Crie uma chave grátis no Google AI Studio (começa com AIza ou AQ.) e cole aqui.");
   const provider = detectProvider(key);
-  if (!provider) throw new HttpError(400, "Não reconheci essa chave. Use uma do Google AI Studio (começa com AIza), Groq (gsk_), OpenAI (sk-), Anthropic (sk-ant-) ou OpenRouter (sk-or-).");
+  if (!provider) throw new HttpError(400, "Não reconheci essa chave. Use uma do Google AI Studio (começa com AIza ou AQ.), Groq (gsk_), OpenAI (sk-), Anthropic (sk-ant-) ou OpenRouter (sk-or-).");
   // Testa antes de salvar. Chave recusada não entra; cota esgotada entra (a chave vale, só o limite do dia acabou).
   let model = PROVIDERS[provider].models[0];
   let warning: string | null = null;

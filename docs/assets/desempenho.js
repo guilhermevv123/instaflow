@@ -33,16 +33,17 @@ const ICO = {
 const ic = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[k]}</svg>`;
 
 // `conta`: só os números dessa conta (página de desempenho da conta)
-export async function carregar(supa, teamId, dias, conta = "") {
-  const hoje = hojeBahia();
+// `ate`: último dia do período (AAAA-MM-DD, ex.: ontem); sem ele, o período termina hoje
+export async function carregar(supa, teamId, dias, conta = "", ate = "") {
+  const hoje = ate && ate < hojeBahia() ? ate : hojeBahia();
   const inicio = somaDias(hoje, -(dias - 1));
   const antes = somaDias(inicio, -1);
   const daConta = (q, coluna = "account_id") => (conta ? q.eq(coluna, conta) : q);
   const [c, s, p, d] = await Promise.all([
     daConta(supa.from("accounts").select("id, username, label, platform, profile_photo_url, status, access_token_expires_at, followers, follows, media_count, insights_ok, stats_synced_at").eq("team_id", teamId).eq("archived", false), "id"),
-    daConta(supa.from("account_stats_daily").select("account_id, day, followers").eq("team_id", teamId).gte("day", antes).order("day")),
+    daConta(supa.from("account_stats_daily").select("account_id, day, followers").eq("team_id", teamId).gte("day", antes).lte("day", hoje).order("day")),
     daConta(supa.from("post_metrics").select("platform_post_id, account_id, post_id, platform, product_type, media_type, permalink, caption, thumbnail_url, posted_at, views, reach, likes, comments, shares, saved, follows, total_interactions, avg_watch_ms, nivel, updated_at").eq("team_id", teamId).order("posted_at", { ascending: false }).limit(2000)),
-    daConta(supa.from("post_metrics_daily").select("platform_post_id, day, views, likes, comments, shares, saved").eq("team_id", teamId).gte("day", antes).order("day")),
+    daConta(supa.from("post_metrics_daily").select("platform_post_id, day, views, likes, comments, shares, saved").eq("team_id", teamId).gte("day", antes).lte("day", hoje).order("day")),
   ]);
   for (const r of [c, s, p, d]) if (r.error) throw new Error(r.error.message);
   return montar({ hoje, inicio, dias, contas: c.data || [], snaps: s.data || [], posts: p.data || [], diario: d.data || [] });
@@ -70,7 +71,7 @@ export function montar({ hoje, inicio, dias, contas, snaps, posts, diario }) {
   const ganhosDia = total.map((v, i) => (i && v != null && total[i - 1] != null ? v - total[i - 1] : null));
 
   // --- posts do período
-  const noPeriodo = posts.filter((p) => (diaBahiaDe(p.posted_at) ?? "") >= inicio);
+  const noPeriodo = posts.filter((p) => { const dia = diaBahiaDe(p.posted_at) ?? ""; return dia >= inicio && dia <= hoje; });
   const agg = (ps) => ({
     posts: ps.length, views: somaOuNada(ps.map((p) => p.views)), reach: somaOuNada(ps.map((p) => p.reach)),
     likes: soma(ps.map((p) => p.likes)), comments: soma(ps.map((p) => p.comments)),

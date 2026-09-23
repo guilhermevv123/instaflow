@@ -21,7 +21,7 @@
   <div class="page-head">
     <div><div class="eyebrow" id="today"></div><h1 class="h1">Início</h1></div>
     <div class="actions dash-top">
-      <div class="seg" id="period" role="tablist" aria-label="Período dos gráficos"><button type="button" data-d="1">Hoje</button><button type="button" data-d="7">7 dias</button><button type="button" data-d="30" class="on">30 dias</button><button type="button" data-d="90">90 dias</button></div>
+      <div class="seg" id="period" role="tablist" aria-label="Período dos gráficos"><button type="button" data-d="1">Hoje</button><button type="button" data-d="ontem">Ontem</button><button type="button" data-d="7">7 dias</button><button type="button" data-d="30" class="on">30 dias</button><button type="button" data-d="90">90 dias</button></div>
       <a class="btn" href="criar/">+ Criar publicação</a>
     </div>
   </div>
@@ -110,13 +110,17 @@
   const $ = (s) => document.querySelector(s);
   $("#today").textContent = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Bahia", weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
-  let days = 30, dash = null, accounts = [];
-  try { const d = Number(localStorage.getItem("if.dash.days")); if ([1, 7, 30, 90].includes(d)) days = d; } catch {}
-  const markPeriod = () => $("#period").querySelectorAll("[data-d]").forEach((b) => { const on = Number(b.dataset.d) === days; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
+  // período: "1", "ontem", "7", "30" ou "90" (ontem = 1 dia terminando ontem)
+  let period = "30", dash = null, accounts = [];
+  try { const d = localStorage.getItem("if.dash.days"); if (["1", "ontem", "7", "30", "90"].includes(d)) period = d; } catch {}
+  const days = () => (period === "ontem" ? 1 : Number(period));
+  const ontem = () => { const d = new Date(Date.now() - 3 * 3600_000 - 86400000); return d.toISOString().slice(0, 10); }; // Bahia (UTC−3)
+  const ate = () => (period === "ontem" ? ontem() : undefined);
+  const markPeriod = () => $("#period").querySelectorAll("[data-d]").forEach((b) => { const on = b.dataset.d === period; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
   markPeriod();
 
   async function fetchDash() {
-    const { data, error } = await supa.rpc("dashboard", { p_team: team.id, p_days: days });
+    const { data, error } = await supa.rpc("dashboard", { p_team: team.id, p_days: days(), ...(ate() ? { p_ate: ate() } : {}) });
     if (error) throw error;
     if (!data) throw new Error("Sem acesso aos números deste time.");
     return data;
@@ -130,7 +134,7 @@
 
   // Desempenho das contas (seguidores, visualizações, engajamento) no mesmo período dos gráficos
   async function loadPerf() {
-    try { paintDesempenho($("#perf-kpis"), await carregarDesempenho(supa, team.id, days), { link: "desempenho/" }); }
+    try { paintDesempenho($("#perf-kpis"), await carregarDesempenho(supa, team.id, days(), "", ate()), { link: "desempenho/" }); }
     catch (e) { $("#perf-kpis").innerHTML = `<div class="ch-empty">Desempenho indisponível agora: ${esc(e.message)}</div>`; }
   }
 
@@ -162,9 +166,9 @@
 
   $("#period").addEventListener("click", (e) => {
     const b = e.target.closest("[data-d]");
-    if (!b || Number(b.dataset.d) === days) return;
-    days = Number(b.dataset.d);
-    try { localStorage.setItem("if.dash.days", String(days)); } catch {}
+    if (!b || b.dataset.d === period) return;
+    period = b.dataset.d;
+    try { localStorage.setItem("if.dash.days", period); } catch {}
     markPeriod();
     loadDash();
     loadPerf();

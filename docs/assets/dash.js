@@ -92,19 +92,20 @@ export function paintFunil(el, badge, monthEl, data) {
   ] });
 }
 
-// Período "Hoje" (1 dia) ou "últimos N dias", com a preposição certa
-const dosDias = (n) => (n === 1 ? "de hoje" : `dos últimos ${n} dias`);
-const nosDias = (n) => (n === 1 ? "hoje" : `nos últimos ${n} dias`);
+// Período "Hoje", "Ontem" (1 dia que terminou antes de hoje) ou "últimos N dias", com a preposição certa
+const isOntem = (data) => !!data.ate && data.ate !== data.today;
+const dosDias = (data) => (isOntem(data) ? "de ontem" : data.days === 1 ? "de hoje" : `dos últimos ${data.days} dias`);
+const nosDias = (data) => (isOntem(data) ? "ontem" : data.days === 1 ? "hoje" : `nos últimos ${data.days} dias`);
 
 export function paintDist(el, sub, data, tab) {
   if (tab === "tipo") {
-    sub.textContent = `Publicações ${dosDias(data.days)}, por tipo`;
+    sub.textContent = `Publicações ${dosDias(data)}, por tipo`;
     donutChart(el, { items: (data.by_placement || []).map((x) => ({ label: TYPE[x.k]?.[0] || x.k, value: x.n, color: TYPE[x.k]?.[1] || "--muted" })), center: "publicações" });
   } else if (tab === "falhas") {
-    sub.textContent = `Falhas ${dosDias(data.days)}, pelo motivo`;
+    sub.textContent = `Falhas ${dosDias(data)}, pelo motivo`;
     donutChart(el, { items: (data.failures || []).map((x, i) => ({ label: x.k, value: x.n, color: REDS[i % REDS.length] })), center: "falhas", empty: "Nenhuma falha no período. 🎉" });
   } else {
-    sub.textContent = `Publicadas ${nosDias(data.days)}, conta a conta`;
+    sub.textContent = `Publicadas ${nosDias(data)}, conta a conta`;
     donutChart(el, { items: (data.by_platform || []).map((x) => ({ label: NET[x.k]?.[0] || x.k, value: x.n, color: NET[x.k]?.[1] || "--muted" })), center: "publicadas" });
   }
 }
@@ -144,12 +145,12 @@ export function paintTop(el, data, accounts) {
 export function paintAll(data, { accounts = [] } = {}) {
   const $ = (s) => document.querySelector(s);
   paintKpis($("#kpis"), data);
-  $("#ritmo-sub").textContent = `Por dia, conta a conta · ${data.days === 1 ? "hoje" : `últimos ${data.days} dias`} e o que já está agendado para os próximos 7`;
+  $("#ritmo-sub").textContent = `Por dia, conta a conta · ${isOntem(data) ? "ontem, hoje" : data.days === 1 ? "hoje" : `últimos ${data.days} dias`} e o que já está agendado para os próximos 7`;
   paintRitmo($("#ch-ritmo"), data);
   paintFunil($("#ch-funil"), $("#funil-badge"), $("#funil-mes"), data);
   paintDist($("#ch-dist"), $("#dist-sub"), data, document.querySelector("#dist-tabs .on")?.dataset.t || "rede");
   paintMes($("#ch-mes"), data);
   heatmap($("#ch-heat"), { cells: data.heat || [] });
-  $("#top-sub").textContent = `Publicadas ${nosDias(data.days)}`;
+  $("#top-sub").textContent = `Publicadas ${nosDias(data)}`;
   paintTop($("#ch-top"), data, accounts);
 }

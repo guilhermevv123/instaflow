@@ -239,6 +239,10 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 .phone .ph { aspect-ratio: 4/5; border-radius: 10px; background: var(--surface-2); overflow: hidden; display: grid; place-items: center; color: var(--muted); font-size: .8rem; }
 .phone .ph img, .phone .ph video { width: 100%; height: 100%; object-fit: cover; }
 .phone .ph.reels, .phone .ph.stories { aspect-ratio: 9/16; }
+.phone .ph.has-video { position: relative; cursor: pointer; }
+.phone .ph .ph-play { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 52px; height: 52px; border-radius: 999px; border: 0; background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center; cursor: pointer; pointer-events: none; transition: opacity .15s; }
+.phone .ph .ph-play svg { width: 22px; height: 22px; margin-left: 3px; }
+.phone .ph.playing .ph-play { opacity: 0; }
 .phone .cap { font-size: .82rem; white-space: pre-wrap; word-break: break-word; max-height: 130px; overflow: auto; }
 .phone .cap b { font-weight: 700; }
 

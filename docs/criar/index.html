@@ -432,10 +432,22 @@
     renderPreview();
   }
   $("#preview-acct").addEventListener("change", renderPreview);
+  // vídeo da prévia: começa pausado; clique toca (com som) e clique de novo pausa
+  $("#ph").addEventListener("click", () => { const v = $("#ph video"); if (!v) return; if (v.paused) { v.muted = false; v.play().catch(() => {}); } else v.pause(); });
   function renderPreview() {
     const first = state.items[0];
     const ph = $("#ph"); ph.className = `ph ${state.placement}`;
-    ph.innerHTML = first ? (first.kind === "video" ? `<video src="${first.previewUrl}" muted playsinline></video>` : `<img src="${first.previewUrl}" alt="">`) : "sem mídia";
+    // só troca a mídia quando ela muda: digitar na legenda não reinicia o vídeo
+    const key = first ? `${first.kind}:${first.previewUrl}` : "";
+    if (ph.dataset.key !== key) {
+      ph.dataset.key = key;
+      ph.innerHTML = first ? (first.kind === "video" ? `<video src="${first.previewUrl}" muted playsinline loop preload="metadata"></video><button type="button" class="ph-play" aria-label="Tocar ou pausar o vídeo"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 4 20 12 7 20 7 4" fill="currentColor"/></svg></button>` : `<img src="${first.previewUrl}" alt="">`) : "sem mídia";
+      const nv = ph.querySelector("video");
+      if (nv) { const sync = () => ph.classList.toggle("playing", !nv.paused); nv.addEventListener("play", sync); nv.addEventListener("pause", sync); }
+    }
+    const v = ph.querySelector("video");
+    ph.classList.toggle("has-video", Boolean(v));
+    ph.classList.toggle("playing", Boolean(v && !v.paused));
     const id = $("#preview-acct").value; const a = accById.get(id);
     const text = ($("#vary").checked && state.overrides[id]) || cap.value;
     $("#ph-cap").innerHTML = a ? `${platformIcon(a.platform || "instagram", 14).replace('class="pf', 'class="pf inline')}<b>${esc(handle(a).replace(/^@/, ""))}</b> ${esc(text)}` : esc(text);

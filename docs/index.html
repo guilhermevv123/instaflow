@@ -103,7 +103,7 @@
 <script type="module">
   import { supa, requireAuth, api, renderNav, fmt, esc, accountHealth, postSummaryPill, PLACEMENT, toast, pageReady, team } from "./assets/app.js";
   import { paintAll, paintDist, exportCsv, paintIcons } from "./assets/dash.js";
-  import { carregar as carregarDesempenho, paintKpis as paintDesempenho } from "./assets/desempenho.js";
+  import { carregar as carregarDesempenho, paintKpis as paintDesempenho, ontemBahia } from "./assets/desempenho.js";
   renderNav("inicio", "./");
   paintIcons(document);
   await requireAuth("./");
@@ -114,8 +114,7 @@
   let period = "30", dash = null, accounts = [];
   try { const d = localStorage.getItem("if.dash.days"); if (["1", "ontem", "7", "30", "90"].includes(d)) period = d; } catch {}
   const days = () => (period === "ontem" ? 1 : Number(period));
-  const ontem = () => { const d = new Date(Date.now() - 3 * 3600_000 - 86400000); return d.toISOString().slice(0, 10); }; // Bahia (UTC−3)
-  const ate = () => (period === "ontem" ? ontem() : undefined);
+  const ate = () => (period === "ontem" ? ontemBahia() : undefined);
   const markPeriod = () => $("#period").querySelectorAll("[data-d]").forEach((b) => { const on = b.dataset.d === period; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
   markPeriod();
 

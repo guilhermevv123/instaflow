@@ -8,6 +8,7 @@ import { areaChart, barChart, nf } from "./charts.js";
 
 const DIA = 86_400_000;
 export const hojeBahia = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+export const ontemBahia = () => new Date(Date.now() - 3 * 3600_000 - DIA).toISOString().slice(0, 10);
 const diaBahiaDe = (iso) => { const t = Date.parse(String(iso ?? "").replace(" ", "T").replace(/([+-]\d\d)$/, "$1:00")); return Number.isFinite(t) ? new Date(t - 3 * 3600_000).toISOString().slice(0, 10) : null; };
 const somaDias = (dia, n) => new Date(Date.parse(`${dia}T12:00:00Z`) + n * DIA).toISOString().slice(0, 10);
 const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -46,7 +47,7 @@ export async function carregar(supa, teamId, dias, conta = "", ate = "") {
     daConta(supa.from("post_metrics_daily").select("platform_post_id, day, views, likes, comments, shares, saved").eq("team_id", teamId).gte("day", antes).lte("day", hoje).order("day")),
   ]);
   for (const r of [c, s, p, d]) if (r.error) throw new Error(r.error.message);
-  return montar({ hoje, inicio, dias, contas: c.data || [], snaps: s.data || [], posts: p.data || [], diario: d.data || [] });
+  return { ...montar({ hoje, inicio, dias, contas: c.data || [], snaps: s.data || [], posts: p.data || [], diario: d.data || [] }), ontem: hoje < hojeBahia() };
 }
 
 export function montar({ hoje, inicio, dias, contas, snaps, posts, diario }) {
@@ -194,8 +195,8 @@ const thumb = (p, cls = "") => p.thumbnail_url
   : `<span class="${cls} sem" aria-hidden="true"></span>`;
 
 export function paintTop(el, sub, d) {
-  const quando = d.dias === 1 ? "hoje" : `nos últimos ${d.dias} dias`;
-  sub.textContent = d.temViewsPost ? `Mais vistos ${d.dias === 1 ? "hoje" : `dos últimos ${d.dias} dias`}` : `Com mais curtidas e comentários ${quando} (as visualizações aparecem depois de reconectar)`;
+  const quando = d.ontem ? "ontem" : d.dias === 1 ? "hoje" : `nos últimos ${d.dias} dias`;
+  sub.textContent = d.temViewsPost ? `Mais vistos ${d.ontem ? "de ontem" : d.dias === 1 ? "hoje" : `dos últimos ${d.dias} dias`}` : `Com mais curtidas e comentários ${quando} (as visualizações aparecem depois de reconectar)`;
   if (!d.top.length) { el.innerHTML = `<div class="ch-empty">Nenhum post publicado neste período.</div>`; return; }
   const porId = new Map(d.contas.map((a) => [a.id, a]));
   el.innerHTML = `<div class="tops">${d.top.map((p, i) => {

@@ -21,7 +21,7 @@
   <div class="page-head">
     <div><div class="eyebrow" id="quando">Seguidores, visualizações e engajamento</div><h1 class="h1">Desempenho</h1></div>
     <div class="actions dash-top">
-      <div class="seg" id="period" role="tablist" aria-label="Período"><button type="button" data-d="1">Hoje</button><button type="button" data-d="7">7 dias</button><button type="button" data-d="30" class="on">30 dias</button><button type="button" data-d="90">90 dias</button></div>
+      <div class="seg" id="period" role="tablist" aria-label="Período"><button type="button" data-d="1">Hoje</button><button type="button" data-d="ontem">Ontem</button><button type="button" data-d="7">7 dias</button><button type="button" data-d="30" class="on">30 dias</button><button type="button" data-d="90">90 dias</button></div>
       <button type="button" class="btn ghost" id="refresh">Atualizar agora</button>
     </div>
   </div>
@@ -79,7 +79,7 @@
 <script type="module">
   import { supa, requireAuth, api, renderNav, fmt, esc, toast, pageReady, team, handle, avatar, platformName } from "../assets/app.js";
   import { paintIcons } from "../assets/dash.js";
-  import { carregar, paintKpis, paintAvisos, paintSeguidores, paintNovas, paintTabela, paintTop, paintTodos } from "../assets/desempenho.js";
+  import { carregar, paintKpis, paintAvisos, paintSeguidores, paintNovas, paintTabela, paintTop, paintTodos, ontemBahia } from "../assets/desempenho.js";
   renderNav("desempenho", "../");
   paintIcons(document);
   await requireAuth("../");
@@ -88,9 +88,11 @@
   const contaAlvo = new URLSearchParams(location.search).get("conta") || "";
   const numero = (n) => (n == null ? "—" : new Intl.NumberFormat("pt-BR").format(n));
 
-  let dias = 30, d = null, ord = { k: "seguidores", dir: -1 }, abaSeg = "total", abaNov = "inter", conta = contaAlvo, limite = contaAlvo ? 60 : 30;
-  try { const x = Number(localStorage.getItem("if.perf.days")); if ([1, 7, 30, 90].includes(x)) dias = x; } catch {}
-  const marca = () => $("#period").querySelectorAll("[data-d]").forEach((b) => { const on = Number(b.dataset.d) === dias; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
+  // período: "1", "ontem", "7", "30" ou "90" (ontem = 1 dia terminando ontem)
+  let periodo = "30", d = null, ord = { k: "seguidores", dir: -1 }, abaSeg = "total", abaNov = "inter", conta = contaAlvo, limite = contaAlvo ? 60 : 30;
+  try { const x = localStorage.getItem("if.perf.days"); if (["1", "ontem", "7", "30", "90"].includes(x)) periodo = x; } catch {}
+  const dias = () => (periodo === "ontem" ? 1 : Number(periodo));
+  const marca = () => $("#period").querySelectorAll("[data-d]").forEach((b) => { const on = b.dataset.d === periodo; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
   marca();
 
   function pintarConta() {
@@ -107,7 +109,7 @@
     const ganhos = l?.ganhos == null ? "—" : `${l.ganhos > 0 ? "+" : ""}${numero(l.ganhos)}`;
     topo.innerHTML = `<div class="conta-topo-in">${avatar(a, 56)}
       <span class="conta-nome"><b>${esc(a.label || handle(a))}</b><span class="muted small">${a.label ? `${esc(handle(a))} · ` : ""}${esc(platformName(a.platform))}</span></span>
-      <span class="conta-nums"><span><b>${numero(a.followers)}</b> seguidores</span><span><b class="${l?.ganhos > 0 ? "up" : l?.ganhos < 0 ? "down" : ""}">${ganhos}</b> ${dias === 1 ? "hoje" : "no período"}</span><span><b>${numero(l?.posts ?? 0)}</b> posts medidos no período</span></span>
+      <span class="conta-nums"><span><b>${numero(a.followers)}</b> seguidores</span><span><b class="${l?.ganhos > 0 ? "up" : l?.ganhos < 0 ? "down" : ""}">${ganhos}</b> ${d.ontem ? "ontem" : dias() === 1 ? "hoje" : "no período"}</span><span><b>${numero(l?.posts ?? 0)}</b> posts medidos no período</span></span>
       <a class="btn ghost small" href="./">← Todas as contas</a></div>`;
   }
 
@@ -127,15 +129,15 @@
   }
   async function recarregar() {
     document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = ".55"));
-    try { d = await carregar(supa, team.id, dias, contaAlvo); pintar(); }
+    try { d = await carregar(supa, team.id, dias(), contaAlvo, periodo === "ontem" ? ontemBahia() : ""); pintar(); }
     catch (e) { toast(e.message, "error"); }
     finally { document.querySelectorAll(".chart-card, .kpis").forEach((x) => (x.style.opacity = "")); }
   }
 
   $("#period").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-d]"); if (!b || Number(b.dataset.d) === dias) return;
-    dias = Number(b.dataset.d);
-    try { localStorage.setItem("if.perf.days", String(dias)); } catch {}
+    const b = e.target.closest("[data-d]"); if (!b || b.dataset.d === periodo) return;
+    periodo = b.dataset.d;
+    try { localStorage.setItem("if.perf.days", periodo); } catch {}
     marca(); recarregar();
   });
   const abas = (id, set) => $(id).addEventListener("click", (e) => {

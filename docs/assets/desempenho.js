@@ -5,6 +5,7 @@
 // são os de hoje); seguidores ganhos = diferença entre o 1º e o último retrato.
 import { esc, avatar, handle, platformName, fmt } from "./app.js";
 import { areaChart, barChart, nf } from "./charts.js";
+import { todas } from "./paginar.js";
 
 const DIA = 86_400_000;
 export const hojeBahia = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
@@ -40,11 +41,12 @@ export async function carregar(supa, teamId, dias, conta = "", ate = "") {
   const inicio = somaDias(hoje, -(dias - 1));
   const antes = somaDias(inicio, -1);
   const daConta = (q, coluna = "account_id") => (conta ? q.eq(coluna, conta) : q);
+  // retratos e posts passam de 1000 linhas em 30/90 dias: lê em páginas (ordem com desempate, senão a página repete ou pula linha)
   const [c, s, p, d] = await Promise.all([
     daConta(supa.from("accounts").select("id, username, label, platform, profile_photo_url, status, access_token_expires_at, followers, follows, media_count, insights_ok, stats_synced_at").eq("team_id", teamId).eq("archived", false), "id"),
-    daConta(supa.from("account_stats_daily").select("account_id, day, followers").eq("team_id", teamId).gte("day", antes).lte("day", hoje).order("day")),
-    daConta(supa.from("post_metrics").select("platform_post_id, account_id, post_id, platform, product_type, media_type, permalink, caption, thumbnail_url, posted_at, views, reach, likes, comments, shares, saved, follows, total_interactions, avg_watch_ms, nivel, updated_at").eq("team_id", teamId).order("posted_at", { ascending: false }).limit(2000)),
-    daConta(supa.from("post_metrics_daily").select("platform_post_id, day, views, likes, comments, shares, saved").eq("team_id", teamId).gte("day", antes).lte("day", hoje).order("day")),
+    todas((de, ate) => daConta(supa.from("account_stats_daily").select("account_id, day, followers").eq("team_id", teamId).gte("day", antes).lte("day", hoje).order("day").order("account_id")).range(de, ate)),
+    todas((de, ate) => daConta(supa.from("post_metrics").select("platform_post_id, account_id, post_id, platform, product_type, media_type, permalink, caption, thumbnail_url, posted_at, views, reach, likes, comments, shares, saved, follows, total_interactions, avg_watch_ms, nivel, updated_at").eq("team_id", teamId).order("posted_at", { ascending: false }).order("platform_post_id")).range(de, ate), { max: 2000 }),
+    todas((de, ate) => daConta(supa.from("post_metrics_daily").select("platform_post_id, day, views, likes, comments, shares, saved").eq("team_id", teamId).gte("day", antes).lte("day", hoje).order("day").order("platform_post_id")).range(de, ate)),
   ]);
   for (const r of [c, s, p, d]) if (r.error) throw new Error(r.error.message);
   return { ...montar({ hoje, inicio, dias, contas: c.data || [], snaps: s.data || [], posts: p.data || [], diario: d.data || [] }), ontem: hoje < hojeBahia() };

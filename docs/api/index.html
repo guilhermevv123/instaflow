@@ -386,8 +386,8 @@ const resposta = await comRetentativa(() => fetch("{BASE}/posts", {
           <thead><tr><th>Limite</th><th>Valor</th><th>Quando passa</th></tr></thead>
           <tbody>
             <tr><td>Chamadas por minuto (por chave)</td><td>120 (ajustável de 10 a 600 ao criar a chave)</td><td><code>429 limite_chamadas</code></td></tr>
-            <tr><td>Publicações por mês, somando todos os times (plano)</td><td>2.500, conta a conta</td><td><code>400</code> com a conta explicada</td></tr>
-            <tr><td>Publicações por mês, por time</td><td>2.500, conta a conta</td><td><code>400</code></td></tr>
+            <tr><td>Publicações por mês, somando todos os times (plano)</td><td>5.000, conta a conta</td><td><code>400</code> com a conta explicada</td></tr>
+            <tr><td>Publicações por mês, por time</td><td>5.000, conta a conta</td><td><code>400</code></td></tr>
             <tr><td>Contas por time</td><td>Sem limite por padrão (ajustável por time)</td><td><code>400</code> ao conectar, se o time tiver limite definido</td></tr>
             <tr><td>Instagram: posts pela API, por conta</td><td>100 a cada 24 horas (carrossel conta 1)</td><td>A rede recusa: a conta aparece como falha</td></tr>
             <tr><td>Instagram: mídias preparadas, por conta</td><td>400 a cada 24 horas</td><td>A rede recusa</td></tr>
@@ -1028,6 +1028,10 @@ http_response_code(200);
       <section class="guia" id="mudancas" data-guia="Histórico de versões" data-grupo-nav="Avisos e integrações" data-busca="changelog versão mudanças novidades">
         <span class="eyebrow-api">Versões</span>
         <h2>Histórico de versões</h2>
+        <h3>1.4.1 · 30/09/2026</h3>
+        <ul>
+          <li>Plano do Post for Me passou de 2.500 para <b>5.000</b> publicações por mês (conta a conta, somando todos os times); cada time passa a poder usar até 5.000 também.</li>
+        </ul>
         <h3>1.4.0 · 23/09/2026</h3>
         <ul>
           <li><a href="#vary-captions"><code>POST /captions/vary</code></a> aceita <code>styles</code>: um estilo de escrita por versão (tom, público, gírias). Com ele, a resposta mantém a posição de cada versão.</li>

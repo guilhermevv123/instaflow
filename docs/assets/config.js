@@ -3,5 +3,5 @@
 window.INSTAFLOW_CONFIG = {
   SUPABASE_URL: "https://bcopmfxhfsyfwaajnnfm.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_MBLq9be77m3A9HriMyeeRw_QSw8yxWa",
-  PLAN_MONTHLY_LIMIT: 2500,
+  PLAN_MONTHLY_LIMIT: 5000,
 };
